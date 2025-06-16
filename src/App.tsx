@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Users, Package, FileText, BarChart3, Plus, Edit, Trash2, Eye, Save, X, Menu, Moon, Sun, LogOut } from 'lucide-react';
 
 interface Vendedor {
