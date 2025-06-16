@@ -1017,14 +1017,12 @@ const App = () => {
                   <button
                     onClick={() => abrirModalVendedor(vendedor)}
                     className="text-blue-600 hover:text-blue-900 mr-3"
-                    title="Editar"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => excluirVendedor(vendedor)}
                     className="text-red-600 hover:text-red-900"
-                    title="Excluir"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -1085,14 +1083,12 @@ const App = () => {
                   <button
                     onClick={() => abrirModalCategoria(categoria)}
                     className="text-blue-600 hover:text-blue-900"
-                    title="Editar"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => excluirCategoria(categoria)}
                     className="text-red-600 hover:text-red-900"
-                    title="Excluir"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -1267,7 +1263,7 @@ const App = () => {
                   <div className="flex items-center">
                     <span>{produto.estoque}</span>
                     {produto.estoque <= produto.estoqueMinimo && (
-                      <AlertCircle className="h-4 w-4 text-yellow-500 ml-1" title="Estoque baixo" />
+                      <AlertCircle className="h-4 w-4 text-yellow-500 ml-1" />
                     )}
                   </div>
                   <div className={`text-xs ${tema.textoSecundario}`}>Mín: {produto.estoqueMinimo}</div>
@@ -1285,14 +1281,12 @@ const App = () => {
                   <button
                     onClick={() => abrirModalProduto(produto)}
                     className="text-blue-600 hover:text-blue-900 mr-3"
-                    title="Editar"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => excluirProduto(produto)}
                     className="text-red-600 hover:text-red-900"
-                    title="Excluir"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
