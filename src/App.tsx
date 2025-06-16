@@ -833,7 +833,7 @@ const App = () => {
 
   // Dashboard
   const Dashboard = () => (
-    <div className="px-6 pt-2 pb-4">
+      <div className="px-6 py-6">
       <h2 className={`text-2xl font-bold mb-6 ${tema.texto}`}>Dashboard</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -935,7 +935,7 @@ const App = () => {
 
   // Tela de Vendedores
   const TelaVendedores = () => (
-    <div className="px-6 pt-2 pb-4">
+    <div className="px-6 py-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 className={`text-2xl font-bold ${tema.texto}`}>Vendedores</h2>
         <button
@@ -1045,7 +1045,7 @@ const App = () => {
 
   // Tela de Categorias
   const TelaCategorias = () => (
-    <div className="px-6 pt-2 pb-4">
+    <div className="px-6 py-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h2 className={`text-2xl font-bold ${tema.texto}`}>Categorias</h2>
@@ -1161,7 +1161,7 @@ const App = () => {
     </div>
   );
   const TelaProdutos = () => (
-    <div className="p-6">
+    <div className="px-6 py-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 className={`text-2xl font-bold ${tema.texto}`}>Produtos</h2>
         <button
@@ -1845,9 +1845,9 @@ const App = () => {
     );
   };
 
-  // Menu Lateral
+// Menu Lateral
   const MenuLateral = () => (
-    <div className={`fixed inset-y-0 left-0 z-50 w-64 ${tema.papel} shadow-lg transform ${menuAberto ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 border-r ${tema.borda}`}>
+    <div className={`fixed inset-y-0 left-0 z-50 w-64 ${tema.papel} shadow-lg transform ${menuAberto ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64 lg:flex-shrink-0 border-r ${tema.borda}`}>
       <div className="flex items-center justify-center h-16 bg-blue-600">
         <h1 className="text-white text-xl font-bold">Sistema Consignação</h1>
       </div>
@@ -1928,8 +1928,8 @@ const App = () => {
     }
   };
 
-  return (
-    <div className={`min-h-screen ${tema.fundo} m-0 p-0`}>
+return (
+    <div className={`min-h-screen ${tema.fundo} flex`}>
       {/* Backdrop para mobile */}
       {menuAberto && (
         <div
@@ -1942,10 +1942,10 @@ const App = () => {
       <MenuLateral />
 
       {/* Conteúdo Principal */}
-      <div className="lg:pl-64">
+      <div className="flex-1 lg:ml-0">
         {/* Header Mobile */}
-        <div className={`${tema.papel} shadow-sm border-b ${tema.borda} lg:hidden h-12`}>
-          <div className="px-4 py-2 h-full flex items-center">
+        <div className={`${tema.papel} shadow-sm border-b ${tema.borda} lg:hidden`}>
+          <div className="px-4 py-3 flex items-center">
             <button
               onClick={() => setMenuAberto(!menuAberto)}
               className={`${tema.texto}`}
@@ -1956,9 +1956,9 @@ const App = () => {
         </div>
 
         {/* Área de Conteúdo */}
-        <div className="relative min-h-screen">
+        <main className="min-h-screen">
           {renderTela()}
-        </div>
+        </main>
       </div>
 
       {/* Modals */}
