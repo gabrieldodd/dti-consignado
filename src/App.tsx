@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, createContext, useContext, memo, useEffect } from 'react';
-import { Users, Package, FileText, BarChart3, Plus, Edit, Trash2, Eye, Save, X, Menu, Moon, Sun, LogOut, Search, AlertCircle, CheckCircle, Package2, DollarSign, Hash, Tag, QrCode, ShoppingCart, ClipboardList, Calculator, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { Users, Package, FileText, BarChart3, Plus, Edit, Trash2, Eye, Save, X, Menu, Moon, Sun, LogOut, Search, AlertCircle, CheckCircle, Package2, DollarSign, Hash, Tag, QrCode, ShoppingCart, ClipboardList, Calculator, Clock, TrendingUp, TrendingDown, EyeOff } from 'lucide-react';
 
 // Interfaces
 interface Vendedor {
@@ -73,6 +73,10 @@ interface AppContextType {
   setCategorias: React.Dispatch<React.SetStateAction<Categoria[]>>;
   setConsignacoes: React.Dispatch<React.SetStateAction<Consignacao[]>>;
   mostrarMensagem: (tipo: 'success' | 'error', texto: string) => void;
+  cookies: {
+    getCookie: (name: string) => string | null;
+    setCookie: (name: string, value: string, days?: number) => void;
+  };
 }
 
 // Context
@@ -363,6 +367,32 @@ const useFormatters = () => {
   return { formatarTelefone, formatarCPF, formatarCNPJ, formatarMoedaBR };
 };
 
+// Hook para gerenciar cookies
+const useCookies = () => {
+  const setCookie = useCallback((name: string, value: string, days: number = 30) => {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+  }, []);
+
+  const getCookie = useCallback((name: string): string | null => {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+  }, []);
+
+  const deleteCookie = useCallback((name: string) => {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  }, []);
+
+  return { setCookie, getCookie, deleteCookie };
+};
+
 // Componente de Login
 const Login = memo(({ onLogin, temaEscuro, onToggleTema }: {
   onLogin: (login: string, senha: string) => void;
@@ -370,11 +400,29 @@ const Login = memo(({ onLogin, temaEscuro, onToggleTema }: {
   onToggleTema: () => void;
 }) => {
   const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
+  const [lembrarLogin, setLembrarLogin] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const tema = useTema(temaEscuro);
+  const { getCookie, setCookie } = useCookies();
+
+  // Carregar login salvo dos cookies na inicialização
+  useEffect(() => {
+    const loginSalvo = getCookie('ultimoLogin');
+    if (loginSalvo) {
+      setFormLogin(prev => ({ ...prev, login: loginSalvo }));
+      setLembrarLogin(true);
+    }
+  }, [getCookie]);
 
   const handleSubmit = useCallback(() => {
+    if (lembrarLogin && formLogin.login) {
+      setCookie('ultimoLogin', formLogin.login, 30); // Salva por 30 dias
+    } else {
+      // Se não quer lembrar, remove o cookie
+      setCookie('ultimoLogin', '', -1);
+    }
     onLogin(formLogin.login, formLogin.senha);
-  }, [formLogin.login, formLogin.senha, onLogin]);
+  }, [formLogin.login, formLogin.senha, lembrarLogin, onLogin, setCookie]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSubmit();
@@ -399,26 +447,55 @@ const Login = memo(({ onLogin, temaEscuro, onToggleTema }: {
               type="text"
               value={formLogin.login}
               onChange={(e) => setFormLogin(prev => ({ ...prev, login: e.target.value }))}
+              onKeyPress={handleKeyPress}
               className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
               placeholder="Digite seu login"
+              autoComplete="username"
             />
           </div>
           
           <div>
             <label className={`block text-sm font-medium ${tema.texto}`}>Senha</label>
+            <div className="relative mt-1">
+              <input
+                type={mostrarSenha ? 'text' : 'password'}
+                value={formLogin.senha}
+                onChange={(e) => setFormLogin(prev => ({ ...prev, senha: e.target.value }))}
+                onKeyPress={handleKeyPress}
+                className={`block w-full px-3 py-2 pr-10 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+                placeholder="Digite sua senha"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha(prev => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
+              >
+                {mostrarSenha ? (
+                  <EyeOff className={`h-4 w-4 ${tema.textoSecundario} hover:${tema.texto}`} />
+                ) : (
+                  <Eye className={`h-4 w-4 ${tema.textoSecundario} hover:${tema.texto}`} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center">
             <input
-              type="password"
-              value={formLogin.senha}
-              onChange={(e) => setFormLogin(prev => ({ ...prev, senha: e.target.value }))}
-              onKeyPress={handleKeyPress}
-              className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
-              placeholder="Digite sua senha"
+              id="lembrar-login"
+              type="checkbox"
+              checked={lembrarLogin}
+              onChange={(e) => setLembrarLogin(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
+            <label htmlFor="lembrar-login" className={`ml-2 block text-sm ${tema.texto}`}>
+              Lembrar meu login
+            </label>
           </div>
           
           <button
             onClick={handleSubmit}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Entrar
           </button>
@@ -426,7 +503,8 @@ const Login = memo(({ onLogin, temaEscuro, onToggleTema }: {
           <div className="flex justify-center">
             <button
               onClick={onToggleTema}
-              className={`p-2 rounded-full ${tema.hover}`}
+              className={`p-2 rounded-full ${tema.hover} transition-colors`}
+              title={temaEscuro ? 'Ativar tema claro' : 'Ativar tema escuro'}
             >
               {temaEscuro ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-gray-600" />}
             </button>
@@ -444,7 +522,7 @@ const Login = memo(({ onLogin, temaEscuro, onToggleTema }: {
 
 // Dashboard
 const Dashboard = memo(() => {
-  const { vendedores, produtos, categorias, consignacoes, tema } = useAppContext();
+  const { vendedores, produtos, categorias, consignacoes, tema, cookies } = useAppContext();
 
   const estatisticas = useMemo(() => {
     const vendedoresAtivos = vendedores.filter(v => v.status === 'Ativo').length;
@@ -479,6 +557,17 @@ const Dashboard = memo(() => {
   const formatarMoedaBR = useCallback((valor: number) => {
     return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }, []);
+
+  // Obter preferências salvas para exibir
+  const preferencias = useMemo(() => {
+    return {
+      tema: cookies.getCookie('tema') || 'claro',
+      ultimoLogin: cookies.getCookie('ultimoLogin'),
+      filtroConsignacoes: cookies.getCookie('filtroStatusConsignacoes') || 'todas',
+      filtroProdutos: cookies.getCookie('filtroStatusProdutos') || 'todos',
+      filtroVendedores: cookies.getCookie('filtroStatusVendedores') || 'todos'
+    };
+  }, [cookies]);
 
   return (
     <div className="px-6 py-6">
@@ -526,7 +615,7 @@ const Dashboard = memo(() => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} p-6`}>
           <h3 className={`text-lg font-medium mb-4 ${tema.texto}`}>Resumo do Sistema</h3>
           <div className="space-y-3 text-sm">
@@ -583,6 +672,44 @@ const Dashboard = memo(() => {
             )}
           </div>
         </div>
+
+        <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} p-6`}>
+          <h3 className={`text-lg font-medium mb-4 ${tema.texto} flex items-center`}>
+            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+            Preferências Salvas
+          </h3>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className={tema.textoSecundario}>Tema:</span>
+              <span className={`${tema.texto} capitalize`}>
+                {preferencias.tema === 'escuro' ? '🌙 Escuro' : '☀️ Claro'}
+              </span>
+            </div>
+            {preferencias.ultimoLogin && (
+              <div className="flex justify-between">
+                <span className={tema.textoSecundario}>Login Salvo:</span>
+                <span className={tema.texto}>{preferencias.ultimoLogin}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className={tema.textoSecundario}>Filtro Consignações:</span>
+              <span className={`${tema.texto} capitalize`}>{preferencias.filtroConsignacoes}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className={tema.textoSecundario}>Filtro Produtos:</span>
+              <span className={`${tema.texto} capitalize`}>{preferencias.filtroProdutos}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className={tema.textoSecundario}>Filtro Vendedores:</span>
+              <span className={`${tema.texto} capitalize`}>{preferencias.filtroVendedores}</span>
+            </div>
+          </div>
+          <div className={`mt-4 p-2 rounded text-center ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-green-50'}`}>
+            <p className={`text-xs ${tema.textoSecundario}`}>
+              ✓ Configurações automáticas salvas nos cookies
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -631,11 +758,16 @@ const MenuLateral = memo(({
   temaEscuro: boolean;
 }) => {
   const tema = useTema(temaEscuro);
+  const { getCookie } = useCookies();
 
   const handleMenuClick = useCallback((tela: string) => {
     onMudarTela(tela);
     onFecharMenu();
   }, [onMudarTela, onFecharMenu]);
+
+  // Obter último tempo de login para mostrar
+  const ultimoLogin = getCookie('ultimoLoginTempo');
+  const tempoLogin = ultimoLogin ? new Date(ultimoLogin) : null;
 
   return (
     <div className={`fixed inset-y-0 left-0 z-50 w-64 ${tema.papel} shadow-lg transform ${menuAberto ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64 lg:flex-shrink-0 border-r ${tema.borda}`}>
@@ -649,17 +781,24 @@ const MenuLateral = memo(({
           <p className={`text-xs ${tema.textoSecundario}`}>
             {tipoUsuario === 'admin' ? 'Administrador' : 'Vendedor'}
           </p>
+          {tempoLogin && (
+            <p className={`text-xs ${tema.textoSecundario} mt-1`}>
+              Login: {tempoLogin.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
         </div>
         <div className="flex space-x-2">
           <button
             onClick={onToggleTema}
-            className={`p-2 rounded-full ${tema.hover}`}
+            className={`p-2 rounded-full ${tema.hover} transition-colors`}
+            title={temaEscuro ? 'Tema escuro ativo' : 'Tema claro ativo'}
           >
             {temaEscuro ? <Sun className="h-4 w-4 text-yellow-400" /> : <Moon className="h-4 w-4 text-gray-600" />}
           </button>
           <button
             onClick={onLogout}
             className={`p-2 rounded-full ${tema.hover} text-red-600`}
+            title="Sair do sistema"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -711,6 +850,13 @@ const MenuLateral = memo(({
           </>
         )}
       </nav>
+
+      {/* Indicador de Preferências Salvas */}
+      <div className={`absolute bottom-4 left-4 right-4 p-2 rounded text-center ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+        <p className={`text-xs ${tema.textoSecundario}`}>
+          ✓ Preferências salvas automaticamente
+        </p>
+      </div>
     </div>
   );
 });
@@ -765,17 +911,90 @@ const InputComErro = memo(({
   );
 });
 
+// Componente Input de Senha com visualização
+const InputSenha = memo(({ 
+  label, 
+  valor, 
+  onChange, 
+  placeholder, 
+  erro, 
+  obrigatorio = false,
+  disabled = false
+}: {
+  label: string;
+  valor: string;
+  onChange: (valor: string) => void;
+  placeholder?: string;
+  erro?: string;
+  obrigatorio?: boolean;
+  disabled?: boolean;
+}) => {
+  const { tema } = useAppContext();
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+
+  const toggleMostrarSenha = useCallback(() => {
+    setMostrarSenha(prev => !prev);
+  }, []);
+
+  return (
+    <div>
+      <label className={`block text-sm font-medium ${tema.texto}`}>
+        {label} {obrigatorio && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <input
+          type={mostrarSenha ? 'text' : 'password'}
+          value={valor}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className={`mt-1 block w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${erro ? 'border-red-500' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          onClick={toggleMostrarSenha}
+          disabled={disabled}
+          className={`absolute inset-y-0 right-0 flex items-center pr-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+          {mostrarSenha ? (
+            <EyeOff className={`h-4 w-4 ${tema.textoSecundario} hover:${tema.texto}`} />
+          ) : (
+            <Eye className={`h-4 w-4 ${tema.textoSecundario} hover:${tema.texto}`} />
+          )}
+        </button>
+      </div>
+      {erro && (
+        <p className="mt-1 text-sm text-red-600 flex items-center">
+          <AlertCircle className="h-4 w-4 mr-1" />
+          {erro}
+        </p>
+      )}
+    </div>
+  );
+});
+
 // Tela de Consignações (VERSÃO MELHORADA DO V4)
 const TelaConsignacoes = memo(() => {
-  const { consignacoes, setConsignacoes, produtos, vendedores, mostrarMensagem, tema, usuarioLogado, tipoUsuario } = useAppContext();
+  const { consignacoes, setConsignacoes, produtos, vendedores, mostrarMensagem, tema, usuarioLogado, tipoUsuario, cookies } = useAppContext();
   const { formatarMoedaBR, formatarCPF, formatarCNPJ, formatarTelefone } = useFormatters();
   const { validarCPF, validarCNPJ } = useValidation();
   
   const [modalAberto, setModalAberto] = useState(false);
   const [modalRetornoAberto, setModalRetornoAberto] = useState(false);
+  const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [consignacaoRetorno, setConsignacaoRetorno] = useState<Consignacao | null>(null);
-  const [filtroStatus, setFiltroStatus] = useState('todas');
+  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<Consignacao | null>(null);
+  
+  // Carregar filtros salvos dos cookies
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusConsignacoes') || 'todas';
+  });
   const [buscaTexto, setBuscaTexto] = useState('');
+
+  // Salvar filtros nos cookies quando mudarem
+  useEffect(() => {
+    cookies.setCookie('filtroStatusConsignacoes', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
 
   const [formConsignacao, setFormConsignacao] = useState({
     clienteNome: '',
@@ -854,6 +1073,23 @@ const TelaConsignacoes = memo(() => {
     setModalRetornoAberto(false);
     setConsignacaoRetorno(null);
   }, []);
+
+  const abrirModalDetalhes = useCallback((consignacao: Consignacao) => {
+    setConsignacaoDetalhes(consignacao);
+    setModalDetalhesAberto(true);
+  }, []);
+
+  const fecharModalDetalhes = useCallback(() => {
+    setModalDetalhesAberto(false);
+    setConsignacaoDetalhes(null);
+  }, []);
+
+  const excluirConsignacao = useCallback((consignacao: Consignacao) => {
+    if (confirm(`Confirma a exclusão da consignação de "${consignacao.clienteNome}"?`)) {
+      setConsignacoes(prev => prev.filter(c => c.id !== consignacao.id));
+      mostrarMensagem('success', 'Consignação excluída com sucesso!');
+    }
+  }, [setConsignacoes, mostrarMensagem]);
 
   const formatarDocumento = useCallback((valor: string, tipo: 'cpf' | 'cnpj') => {
     return tipo === 'cpf' ? formatarCPF(valor) : formatarCNPJ(valor);
@@ -1109,7 +1345,7 @@ const TelaConsignacoes = memo(() => {
                 </div>
 
                 {consignacao.retorno && (
-                  <div className={`mt-4 p-3 rounded-md bg-blue-50 border ${tema.borda}`}>
+                  <div className={`mt-4 p-3 rounded-md border ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-blue-50'}`}>
                     <h4 className={`font-medium ${tema.texto} mb-2`}>Resultado da Consignação:</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
@@ -1154,11 +1390,22 @@ const TelaConsignacoes = memo(() => {
                 )}
                 
                 <button
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-gray-700"
+                  onClick={() => abrirModalDetalhes(consignacao)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
                 >
                   <Eye className="mr-2 h-4 w-4" />
                   Ver Detalhes
                 </button>
+
+                {tipoUsuario === 'admin' && (
+                  <button
+                    onClick={() => excluirConsignacao(consignacao)}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-red-700"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1318,7 +1565,7 @@ const TelaConsignacoes = memo(() => {
                   </div>
 
                   {formConsignacao.quantidadeTotal && formConsignacao.valorTotal && (
-                    <div className={`p-4 border rounded-md ${tema.borda} bg-blue-50`}>
+                    <div className={`p-4 border rounded-md ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-blue-50'}`}>
                       <h5 className={`font-medium ${tema.texto} mb-2`}>Resumo:</h5>
                       <div className="text-sm space-y-1">
                         <p className={tema.texto}>
@@ -1376,7 +1623,7 @@ const TelaConsignacoes = memo(() => {
                 
                 <div className="space-y-6">
                   {/* Resumo da Consignação Original */}
-                  <div className={`p-4 border rounded-md ${tema.borda} bg-gray-50`}>
+                  <div className={`p-4 border rounded-md ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-gray-50'}`}>
                     <h4 className={`font-medium ${tema.texto} mb-3`}>Consignação Original</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
@@ -1423,7 +1670,7 @@ const TelaConsignacoes = memo(() => {
                         </button>
                       </div>
 
-                      <div className={`p-4 border rounded-md ${tema.borda} bg-blue-50`}>
+                      <div className={`p-4 border rounded-md ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-blue-50'}`}>
                         <h5 className={`font-medium ${tema.texto} mb-2`}>Instruções:</h5>
                         <ul className={`text-sm ${tema.textoSecundario} space-y-1`}>
                           <li>• Escaneie ou digite o código de cada produto que retornou</li>
@@ -1519,8 +1766,8 @@ const TelaConsignacoes = memo(() => {
                       {/* Valor Final */}
                       <div className={`p-4 border-2 rounded-md ${tema.borda} ${
                         (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) >= 0 
-                          ? 'bg-green-50 border-green-200' 
-                          : 'bg-red-50 border-red-200'
+                          ? tema.fundo === 'bg-gray-900' ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-200'
+                          : tema.fundo === 'bg-gray-900' ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'
                       }`}>
                         <div className="text-center">
                           <p className={`text-sm ${tema.textoSecundario} mb-1`}>Cliente deve pagar:</p>
@@ -1562,21 +1809,244 @@ const TelaConsignacoes = memo(() => {
           </div>
         </div>
       )}
+
+      {/* Modal Detalhes da Consignação */}
+      {modalDetalhesAberto && consignacaoDetalhes && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalDetalhes}></div>
+            
+            <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full`}>
+              <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[90vh] overflow-y-auto">
+                <h3 className={`text-lg font-medium ${tema.texto} mb-4 flex items-center`}>
+                  <Eye className="mr-2 h-5 w-5" />
+                  Detalhes da Consignação #{consignacaoDetalhes.id}
+                </h3>
+                
+                <div className="space-y-6">
+                  {/* Informações do Cliente */}
+                  <div className={`p-4 border rounded-md ${tema.borda}`}>
+                    <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
+                      <Users className="mr-2 h-4 w-4" />
+                      Informações do Cliente
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Nome:</span>
+                        <p className={tema.texto}>{consignacaoDetalhes.clienteNome}</p>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>
+                          {consignacaoDetalhes.tipoDocumento.toUpperCase()}:
+                        </span>
+                        <p className={tema.texto}>{consignacaoDetalhes.clienteDocumento}</p>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Telefone:</span>
+                        <p className={tema.texto}>{consignacaoDetalhes.clienteTelefone}</p>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Tipo:</span>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          consignacaoDetalhes.tipoDocumento === 'cpf' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {consignacaoDetalhes.tipoDocumento === 'cpf' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Informações da Consignação */}
+                  <div className={`p-4 border rounded-md ${tema.borda}`}>
+                    <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
+                      <ClipboardList className="mr-2 h-4 w-4" />
+                      Informações da Consignação
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Vendedor:</span>
+                        <p className={tema.texto}>{consignacaoDetalhes.vendedor.nome}</p>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Data Consignação:</span>
+                        <p className={tema.texto}>{new Date(consignacaoDetalhes.dataConsignacao).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                      {consignacaoDetalhes.dataRetorno && (
+                        <div>
+                          <span className={`font-medium ${tema.textoSecundario}`}>Data Retorno:</span>
+                          <p className={tema.texto}>{new Date(consignacaoDetalhes.dataRetorno).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                      )}
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Status:</span>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          consignacaoDetalhes.status === 'ativa' 
+                            ? 'bg-green-100 text-green-800' 
+                            : consignacaoDetalhes.status === 'finalizada'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {consignacaoDetalhes.status.charAt(0).toUpperCase() + consignacaoDetalhes.status.slice(1)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Quantidade Total:</span>
+                        <p className={`font-bold ${tema.texto}`}>{consignacaoDetalhes.quantidadeTotal} produtos</p>
+                      </div>
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Valor Total:</span>
+                        <p className={`font-bold ${tema.texto}`}>{formatarMoedaBR(consignacaoDetalhes.valorTotal)}</p>
+                      </div>
+                    </div>
+                    
+                    {consignacaoDetalhes.observacoes && (
+                      <div className="mt-4">
+                        <span className={`font-medium ${tema.textoSecundario}`}>Observações:</span>
+                        <p className={`text-sm ${tema.texto} mt-1 p-2 rounded ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                          {consignacaoDetalhes.observacoes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Resultado da Consignação */}
+                  {consignacaoDetalhes.retorno && (
+                    <div className={`p-4 border rounded-md ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-green-50'}`}>
+                      <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
+                        <Calculator className="mr-2 h-4 w-4" />
+                        Resultado da Consignação
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center">
+                          <span className={`font-medium ${tema.textoSecundario}`}>Produtos Retornados</span>
+                          <p className={`text-2xl font-bold ${tema.texto}`}>{consignacaoDetalhes.retorno.quantidadeRetornada}</p>
+                          <p className={`text-xs ${tema.textoSecundario}`}>
+                            {((consignacaoDetalhes.retorno.quantidadeRetornada / consignacaoDetalhes.quantidadeTotal) * 100).toFixed(1)}% do total
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <span className={`font-medium ${tema.textoSecundario}`}>Produtos Vendidos</span>
+                          <p className={`text-2xl font-bold text-green-600`}>{consignacaoDetalhes.retorno.quantidadeVendida}</p>
+                          <p className={`text-xs ${tema.textoSecundario}`}>
+                            {((consignacaoDetalhes.retorno.quantidadeVendida / consignacaoDetalhes.quantidadeTotal) * 100).toFixed(1)}% do total
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <span className={`font-medium ${tema.textoSecundario}`}>Valor Retornado</span>
+                          <p className={`text-xl font-bold ${tema.texto}`}>{formatarMoedaBR(consignacaoDetalhes.retorno.valorRetornado)}</p>
+                          <p className={`text-xs ${tema.textoSecundario}`}>
+                            {((consignacaoDetalhes.retorno.valorRetornado / consignacaoDetalhes.valorTotal) * 100).toFixed(1)}% do valor
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <span className={`font-medium ${tema.textoSecundario}`}>Valor Devido</span>
+                          <p className={`text-xl font-bold ${consignacaoDetalhes.retorno.valorDevido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {formatarMoedaBR(consignacaoDetalhes.retorno.valorDevido)}
+                          </p>
+                          <p className={`text-xs ${tema.textoSecundario}`}>
+                            {consignacaoDetalhes.retorno.valorDevido >= 0 ? 'A receber' : 'A devolver'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resumo Financeiro */}
+                  <div className={`p-4 border rounded-md ${tema.borda}`}>
+                    <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
+                      <DollarSign className="mr-2 h-4 w-4" />
+                      Resumo Financeiro
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className={`font-medium ${tema.textoSecundario}`}>Valor Médio por Produto:</span>
+                        <p className={tema.texto}>{formatarMoedaBR(consignacaoDetalhes.valorTotal / consignacaoDetalhes.quantidadeTotal)}</p>
+                      </div>
+                      {consignacaoDetalhes.retorno && (
+                        <>
+                          <div>
+                            <span className={`font-medium ${tema.textoSecundario}`}>Valor Médio Vendido:</span>
+                            <p className={tema.texto}>
+                              {consignacaoDetalhes.retorno.quantidadeVendida > 0 
+                                ? formatarMoedaBR((consignacaoDetalhes.valorTotal - consignacaoDetalhes.retorno.valorRetornado) / consignacaoDetalhes.retorno.quantidadeVendida)
+                                : 'R$ 0,00'
+                              }
+                            </p>
+                          </div>
+                          <div>
+                            <span className={`font-medium ${tema.textoSecundario}`}>Taxa de Conversão:</span>
+                            <p className={`font-bold ${
+                              ((consignacaoDetalhes.retorno.quantidadeVendida / consignacaoDetalhes.quantidadeTotal) * 100) >= 50 
+                                ? 'text-green-600' 
+                                : 'text-orange-600'
+                            }`}>
+                              {((consignacaoDetalhes.retorno.quantidadeVendida / consignacaoDetalhes.quantidadeTotal) * 100).toFixed(1)}%
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-6">
+                  <button
+                    onClick={fecharModalDetalhes}
+                    className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
+                  >
+                    <X className="mr-2 h-4 w-4 inline" />
+                    Fechar
+                  </button>
+                  {consignacaoDetalhes.status === 'ativa' && (
+                    <button
+                      onClick={() => {
+                        fecharModalDetalhes();
+                        abrirModalRetorno(consignacaoDetalhes);
+                      }}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                    >
+                      <QrCode className="mr-2 h-4 w-4" />
+                      Conferir Retorno
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
 
 // Tela de Produtos (mantendo a implementação original do v3)
 const TelaProdutos = memo(() => {
-  const { produtos, setProdutos, categorias, mostrarMensagem, tema } = useAppContext();
+  const { produtos, setProdutos, categorias, mostrarMensagem, tema, cookies } = useAppContext();
   const { validarCodigoBarras } = useValidation();
   const { formatarMoedaBR } = useFormatters();
   
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
   const [buscaTexto, setBuscaTexto] = useState('');
-  const [filtroCategoria, setFiltroCategoria] = useState('todas');
-  const [filtroStatus, setFiltroStatus] = useState('todos');
+  
+  // Carregar filtros salvos dos cookies
+  const [filtroCategoria, setFiltroCategoria] = useState(() => {
+    return cookies.getCookie('filtroCategoriasProdutos') || 'todas';
+  });
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusProdutos') || 'todos';
+  });
+
+  // Salvar filtros nos cookies quando mudarem
+  useEffect(() => {
+    cookies.setCookie('filtroCategoriasProdutos', filtroCategoria, 30);
+  }, [filtroCategoria, cookies]);
+
+  useEffect(() => {
+    cookies.setCookie('filtroStatusProdutos', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
 
   const [formProduto, setFormProduto] = useState({
     nome: '',
@@ -2251,7 +2721,7 @@ const TelaCategorias = memo(() => {
 
 // Tela de Vendedores
 const TelaVendedores = memo(() => {
-  const { vendedores, setVendedores, mostrarMensagem, tema } = useAppContext();
+  const { vendedores, setVendedores, mostrarMensagem, tema, cookies } = useAppContext();
   const { validarEmail, validarTelefone } = useValidation();
   const { formatarTelefone } = useFormatters();
   
@@ -2259,8 +2729,17 @@ const TelaVendedores = memo(() => {
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [vendedorEditando, setVendedorEditando] = useState<Vendedor | null>(null);
   const [vendedorParaExcluir, setVendedorParaExcluir] = useState<Vendedor | null>(null);
-  const [filtroStatus, setFiltroStatus] = useState('todos');
   const [buscaTexto, setBuscaTexto] = useState('');
+  
+  // Carregar filtro salvo dos cookies
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusVendedores') || 'todos';
+  });
+
+  // Salvar filtro nos cookies quando mudar
+  useEffect(() => {
+    cookies.setCookie('filtroStatusVendedores', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
 
   const [formVendedor, setFormVendedor] = useState({
     nome: '',
@@ -2586,11 +3065,10 @@ const TelaVendedores = memo(() => {
                     obrigatorio
                   />
                   
-                  <InputComErro
+                  <InputSenha
                     label="Senha"
                     valor={formVendedor.senha}
                     onChange={(valor) => setFormVendedor(prev => ({ ...prev, senha: valor }))}
-                    tipo="password"
                     placeholder="Mínimo 6 caracteres"
                     erro={formErrors.senha}
                     obrigatorio
@@ -2695,8 +3173,14 @@ const TelaVendedores = memo(() => {
 
 // Componente principal
 const App = () => {
+  const { getCookie, setCookie } = useCookies();
+  
   // Estados principais
-  const [temaEscuro, setTemaEscuro] = useState(false);
+  const [temaEscuro, setTemaEscuro] = useState(() => {
+    // Carrega tema salvo dos cookies ou usa tema claro como padrão
+    const temaSalvo = getCookie('tema');
+    return temaSalvo === 'escuro';
+  });
   const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
   const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
   const [telaAtiva, setTelaAtiva] = useState('dashboard');
@@ -2713,6 +3197,19 @@ const App = () => {
 
   const tema = useTema(temaEscuro);
 
+  // Salvar tema nos cookies sempre que mudar
+  useEffect(() => {
+    setCookie('tema', temaEscuro ? 'escuro' : 'claro', 365); // Salva por 1 ano
+  }, [temaEscuro, setCookie]);
+
+  // Salvar outras preferências nos cookies
+  useEffect(() => {
+    if (usuarioLogado) {
+      setCookie('ultimaTelaAtiva', telaAtiva, 7); // Salva por 7 dias
+      setCookie('ultimoTipoUsuario', tipoUsuario || '', 7);
+    }
+  }, [telaAtiva, tipoUsuario, usuarioLogado, setCookie]);
+
   // Funções memoizadas
   const toggleTema = useCallback(() => {
     setTemaEscuro(prev => !prev);
@@ -2725,8 +3222,19 @@ const App = () => {
 
   const fazerLogin = useCallback((login: string, senha: string) => {
     if (login === 'admin' && senha === 'admin123') {
-      setUsuarioLogado({ id: 0, nome: 'Administrador', login: 'admin' });
+      const usuario = { id: 0, nome: 'Administrador', login: 'admin' };
+      setUsuarioLogado(usuario);
       setTipoUsuario('admin');
+      
+      // Salvar informações do login nos cookies
+      setCookie('ultimoLoginSucesso', login, 30);
+      setCookie('ultimoLoginTempo', new Date().toISOString(), 7);
+      
+      // Restaurar última tela ativa se houver
+      const ultimaTela = getCookie('ultimaTelaAtiva');
+      if (ultimaTela && ['dashboard', 'consignacoes', 'vendedores', 'produtos', 'categorias'].includes(ultimaTela)) {
+        setTelaAtiva(ultimaTela);
+      }
       return;
     }
 
@@ -2739,16 +3247,41 @@ const App = () => {
     if (vendedor) {
       setUsuarioLogado(vendedor);
       setTipoUsuario('vendedor');
+      
+      // Salvar informações do login nos cookies
+      setCookie('ultimoLoginSucesso', login, 30);
+      setCookie('ultimoLoginTempo', new Date().toISOString(), 7);
+      
+      // Para vendedores, sempre iniciar no dashboard ou consignações
+      const ultimaTela = getCookie('ultimaTelaAtiva');
+      if (ultimaTela && ['dashboard', 'consignacoes'].includes(ultimaTela)) {
+        setTelaAtiva(ultimaTela);
+      } else {
+        setTelaAtiva('consignacoes'); // Vendedores iniciam nas consignações
+      }
     } else {
       alert('Login ou senha inválidos!');
     }
-  }, [vendedores]);
+  }, [vendedores, setCookie, getCookie]);
 
   const fazerLogout = useCallback(() => {
     setUsuarioLogado(null);
     setTipoUsuario(null);
     setTelaAtiva('dashboard');
-  }, []);
+    
+    // Limpar cookies relacionados à sessão
+    setCookie('ultimaTelaAtiva', '', -1);
+    setCookie('ultimoTipoUsuario', '', -1);
+    setCookie('ultimoLoginTempo', '', -1);
+    
+    // Opcional: limpar também filtros se o usuário quiser "começar do zero"
+    // setCookie('filtroStatusConsignacoes', '', -1);
+    // setCookie('filtroCategoriasProdutos', '', -1);
+    // setCookie('filtroStatusProdutos', '', -1);
+    // setCookie('filtroStatusVendedores', '', -1);
+    
+    mostrarMensagem('success', 'Logout realizado com sucesso!');
+  }, [setCookie, mostrarMensagem]);
 
   const mudarTela = useCallback((tela: string) => {
     setTelaAtiva(tela);
@@ -2777,7 +3310,8 @@ const App = () => {
     setProdutos,
     setCategorias,
     setConsignacoes,
-    mostrarMensagem
+    mostrarMensagem,
+    cookies: { getCookie, setCookie } // Adicionar cookies ao contexto
   }), [
     temaEscuro,
     usuarioLogado,
@@ -2787,7 +3321,9 @@ const App = () => {
     produtos,
     categorias,
     consignacoes,
-    mostrarMensagem
+    mostrarMensagem,
+    getCookie,
+    setCookie
   ]);
 
   // Componente de conteúdo memoizado
