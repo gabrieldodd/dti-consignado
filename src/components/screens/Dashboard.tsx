@@ -26,23 +26,23 @@ export const Dashboard: React.FC = () => {
   const { formatarMoedaBR } = useFormatters();
 
   const estatisticas = useMemo(() => {
-    const vendedoresAtivos = vendedores.filter(v => v.status === 'Ativo').length;
-    const produtosAtivos = produtos.filter(p => p.ativo).length;
-    const produtosEstoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length;
+    const vendedoresAtivos = vendedores.filter((v: any) => v.status === 'Ativo').length;
+    const produtosAtivos = produtos.filter((p: any) => p.ativo).length;
+    const produtosEstoqueBaixo = produtos.filter((p: any) => p.ativo && p.estoque <= p.estoqueMinimo).length;
     const valorTotalEstoque = produtos
-      .filter(p => p.ativo)
-      .reduce((total, p) => total + (p.valorVenda * p.estoque), 0);
-    const categoriasAtivas = categorias.filter(c => c.ativa).length;
+      .filter((p: any) => p.ativo)
+      .reduce((total: number, p: any) => total + (p.valorVenda * p.estoque), 0);
+    const categoriasAtivas = categorias.filter((c: any) => c.ativa).length;
     const itensEstoque = produtos
-      .filter(p => p.ativo)
-      .reduce((total, p) => total + p.estoque, 0);
-    const consignacaoesAtivas = consignacoes.filter(c => c.status === 'ativa').length;
+      .filter((p: any) => p.ativo)
+      .reduce((total: number, p: any) => total + p.estoque, 0);
+    const consignacaoesAtivas = consignacoes.filter((c: any) => c.status === 'ativa').length;
     const valorConsignacaoesAtivas = consignacoes
-      .filter(c => c.status === 'ativa')
-      .reduce((total, c) => total + c.valorTotal, 0);
+      .filter((c: any) => c.status === 'ativa')
+      .reduce((total: number, c: any) => total + c.valorTotal, 0);
     const quantidadeTotalConsignada = consignacoes
-      .filter(c => c.status === 'ativa')
-      .reduce((total, c) => total + c.quantidadeTotal, 0);
+      .filter((c: any) => c.status === 'ativa')
+      .reduce((total: number, c: any) => total + c.quantidadeTotal, 0);
 
     return {
       vendedoresAtivos,
@@ -202,8 +202,8 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="space-y-2">
               {produtos
-                .filter(p => p.ativo && p.estoque <= p.estoqueMinimo)
-                .map(produto => (
+                .filter((p: any) => p.ativo && p.estoque <= p.estoqueMinimo)
+                .map((produto: any) => (
                   <div
                     key={produto.id}
                     className={`flex justify-between items-center p-3 ${tema.hover} rounded-md`}
@@ -237,9 +237,9 @@ export const Dashboard: React.FC = () => {
           </h2>
           <div className="space-y-3">
             {consignacoes
-              .filter(c => c.status === 'ativa')
+              .filter((c: any) => c.status === 'ativa')
               .slice(0, 5)
-              .map(consignacao => (
+              .map((consignacao: any) => (
                 <div
                   key={consignacao.id}
                   className={`flex justify-between items-center p-3 ${tema.hover} rounded-md`}
@@ -262,7 +262,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
-            {consignacoes.filter(c => c.status === 'ativa').length === 0 && (
+            {consignacoes.filter((c: any) => c.status === 'ativa').length === 0 && (
               <p className={`text-center py-4 ${tema.textoSecundario}`}>
                 Nenhuma consignação ativa encontrada
               </p>

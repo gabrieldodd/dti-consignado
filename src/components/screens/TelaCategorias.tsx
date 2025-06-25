@@ -63,7 +63,7 @@ export const TelaCategorias: React.FC = () => {
                 </tr>
               </thead>
               <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-                {categorias.map((categoria) => (
+                {categorias.map((categoria: any) => (
                   <tr key={categoria.id} className={tema.hover}>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${tema.texto}`}>
                       {categoria.nome}

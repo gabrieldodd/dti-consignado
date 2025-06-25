@@ -28,6 +28,7 @@ import { COOKIE_CONFIG, ADMIN_CREDENTIALS, MESSAGES } from './utils/constants';
 
 // Types
 import { TipoUsuario } from './types/Common';
+import { Vendedor } from './types/Vendedor';
 
 /**
  * Componente principal da aplicação
@@ -102,7 +103,7 @@ const AppContent: React.FC = () => {
     }
 
     // Verificar credenciais dos vendedores
-    const vendedor = vendedores.find(v => 
+    const vendedor = vendedores.find((v: Vendedor) => 
       v.login === login && 
       v.senha === senha && 
       v.status === 'Ativo'
@@ -145,12 +146,12 @@ const AppContent: React.FC = () => {
   }, []);
 
   const toggleMenu = useCallback(() => {
-    setMenuAberto(prev => !prev);
+    setMenuAberto((prev: boolean) => !prev);
   }, []);
 
   // Função para alternar tema
   const toggleTema = useCallback(() => {
-    setTemaEscuro(prev => !prev);
+    setTemaEscuro((prev: boolean) => !prev);
   }, [setTemaEscuro]);
 
   // Renderizar conteúdo baseado na tela ativa
