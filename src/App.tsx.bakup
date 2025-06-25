@@ -1,11 +1,5 @@
 import React, { useState, useCallback, useMemo, createContext, useContext, memo, useEffect } from 'react';
 import { Users, Package, FileText, BarChart3, Plus, Edit, Trash2, Eye, Save, X, Menu, Moon, Sun, LogOut, Search, AlertCircle, CheckCircle, Package2, DollarSign, Hash, Tag, QrCode, ShoppingCart, ClipboardList, Calculator, Clock, TrendingUp, TrendingDown, EyeOff } from 'lucide-react';
-import { AppProvider } from './contexts/AppContext';
-import { Dashboard } from './components/screens/Dashboard';
-import { Login } from './components/screens/Login';
-import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
-import { MenuLateral } from './components/layout/MenuLateral';
-import { Header } from './components/layout/Header';
 
 // Interfaces
 interface Vendedor {
@@ -3178,27 +3172,7 @@ const TelaVendedores = memo(() => {
 });
 
 // Componente principal
-import { useAppContext } from './contexts/AppContext';
 const App = () => {
-	 const { 
-    usuarioLogado, 
-    setUsuarioLogado,
-    tipoUsuario, 
-    setTipoUsuario,
-    temaEscuro,
-    setTemaEscuro,
-    tema,
-    vendedores,
-    produtos,
-    categorias,
-    consignacoes,
-    setVendedores,
-    setProdutos,
-    setCategorias,
-    setConsignacoes,
-    mostrarMensagem,
-    cookies
-  } = useAppContext();
   const { getCookie, setCookie } = useCookies();
   
   // Estados principais
@@ -3207,21 +3181,21 @@ const App = () => {
     const temaSalvo = getCookie('tema');
     return temaSalvo === 'escuro';
   });
-//  const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
-//  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
+  const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
+  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
   const [telaAtiva, setTelaAtiva] = useState('dashboard');
   const [menuAberto, setMenuAberto] = useState(false);
   
   // Estados de dados
-// const [vendedores, setVendedores] = useState(VENDEDORES_INICIAIS);
-// const [produtos, setProdutos] = useState(PRODUTOS_INICIAIS);
-// const [categorias, setCategorias] = useState(CATEGORIAS_INICIAIS);
-// const [consignacoes, setConsignacoes] = useState(CONSIGNACOES_INICIAIS);
+  const [vendedores, setVendedores] = useState<Vendedor[]>(VENDEDORES_INICIAIS);
+  const [produtos, setProdutos] = useState<Produto[]>(PRODUTOS_INICIAIS);
+  const [categorias, setCategorias] = useState<Categoria[]>(CATEGORIAS_INICIAIS);
+  const [consignacoes, setConsignacoes] = useState<Consignacao[]>(CONSIGNACOES_INICIAIS);
   
   // Estado de mensagem
   const [mensagem, setMensagem] = useState<{tipo: 'success' | 'error', texto: string} | null>(null);
 
-// const [temaEscuro, setTemaEscuro] = useState(false);
+  const tema = useTema(temaEscuro);
 
   // Salvar tema nos cookies sempre que mudar
   useEffect(() => {
@@ -3430,12 +3404,4 @@ const App = () => {
   );
 };
 
-const AppWithProvider = () => {
-  return (
-    <AppProvider>
-      <App />
-    </AppProvider>
-  );
-};
-
-export default AppWithProvider;
+export default App;
