@@ -1,8 +1,8 @@
 // src/components/screens/Login.tsx
 import React, { useState } from 'react';
 import { LogIn, Sun, Moon } from 'lucide-react';
-import { InputComErro } from '../common/inputComErro';
-import { InputSenha } from '../common/inputSenha';
+import { InputComErro } from '../common/InputComErro';
+import { InputSenha } from '../common/InputSenha';
 
 interface LoginProps {
   onLogin: (login: string, senha: string) => void;

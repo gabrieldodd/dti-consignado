@@ -1,12 +1,11 @@
 // src/types/Vendedor.ts
-import { Status } from './Common';
 
 export interface Vendedor {
   id: number;
   nome: string;
   email: string;
   telefone: string;
-  status: Status;
+  status: string; // Mudando de Status para string para compatibilidade
   login: string;
   senha: string;
   dataCadastro: string;
@@ -16,9 +15,10 @@ export interface VendedorForm {
   nome: string;
   email: string;
   telefone: string;
-  status: Status;
   login: string;
   senha: string;
+  confirmarSenha: string;
+  status: string;
 }
 
 export interface VendedorFormErrors {
@@ -27,4 +27,5 @@ export interface VendedorFormErrors {
   telefone?: string;
   login?: string;
   senha?: string;
+  confirmarSenha?: string;
 }

@@ -1,49 +1,41 @@
 // src/hooks/useValidation.ts
 import { useCallback } from 'react';
-import * as validators from '../utils/validators';
 
-/**
- * Hook para funções de validação
- */
 export const useValidation = () => {
   const validarEmail = useCallback((email: string) => {
-    return validators.validarEmail(email);
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
   }, []);
 
   const validarTelefone = useCallback((telefone: string) => {
-    return validators.validarTelefone(telefone);
+    const regex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
+    return regex.test(telefone);
   }, []);
 
   const validarCPF = useCallback((cpf: string) => {
-    return validators.validarCPF(cpf);
+    const regex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
+    return regex.test(cpf);
   }, []);
 
   const validarCNPJ = useCallback((cnpj: string) => {
-    return validators.validarCNPJ(cnpj);
+    const regex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+    return regex.test(cnpj);
   }, []);
 
   const validarCodigoBarras = useCallback((codigo: string) => {
-    return validators.validarCodigoBarras(codigo);
-  }, []);
-
-  const validarNome = useCallback((nome: string) => {
-    return validators.validarNome(nome);
-  }, []);
-
-  const validarLogin = useCallback((login: string) => {
-    return validators.validarLogin(login);
+    return codigo.length >= 8 && /^\d+$/.test(codigo);
   }, []);
 
   const validarSenha = useCallback((senha: string) => {
-    return validators.validarSenha(senha);
+    return senha.length >= 6;
   }, []);
 
-  const validarValorPositivo = useCallback((valor: number) => {
-    return validators.validarValorPositivo(valor);
+  const validarNome = useCallback((nome: string) => {
+    return nome.trim().length >= 2;
   }, []);
 
-  const validarValorNaoNegativo = useCallback((valor: number) => {
-    return validators.validarValorNaoNegativo(valor);
+  const validarLogin = useCallback((login: string) => {
+    return login.trim().length >= 3;
   }, []);
 
   return {
@@ -52,10 +44,8 @@ export const useValidation = () => {
     validarCPF,
     validarCNPJ,
     validarCodigoBarras,
-    validarNome,
-    validarLogin,
     validarSenha,
-    validarValorPositivo,
-    validarValorNaoNegativo
+    validarNome,
+    validarLogin
   };
 };

@@ -1,109 +1,159 @@
 // src/App.tsx
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Menu } from 'lucide-react';
-
-// Contexts
+import React, { useState, useCallback } from 'react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 
-// Hooks
-import { useCookies } from './hooks/useCookies';
+// Componente temporário simples para Login
+const Login: React.FC<{ onLogin: (login: string, senha: string) => void }> = ({ onLogin }) => {
+  const [login, setLogin] = useState('');
+  const [senha, setSenha] = useState('');
 
-// Components - Layout
-import { MenuLateral } from './components/layout/MenuLateral';
-import { Header } from './components/layout/Header';
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onLogin(login, senha);
+  };
 
-// Components - Screens
-import { Login } from './components/screens/Login';
-import { Dashboard } from './components/screens/Dashboard';
-import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
-import { TelaProdutos } from './components/screens/TelaProdutos';
-import { TelaVendedores } from './components/screens/TelaVendedores';
-import { TelaCategorias } from './components/screens/TelaCategorias';
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="bg-white p-8 rounded-lg shadow-md w-96">
+        <h2 className="text-2xl font-bold mb-6 text-center">Sistema de Consignação</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Login</label>
+            <input
+              type="text"
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Digite seu login"
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">Senha</label>
+            <input
+              type="password"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Digite sua senha"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Entrar
+          </button>
+        </form>
+        <div className="mt-4 text-sm text-gray-600 text-center">
+          <p>Admin: admin / admin123</p>
+          <p>Vendedor: joao123 / 123456</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-// Components - Common
-import { Mensagem } from './components/common/Mensagem';
+// Componente temporário simples para Dashboard
+const Dashboard: React.FC = () => {
+  const { tema, vendedores, produtos, consignacoes, usuarioLogado, tipoUsuario } = useAppContext();
 
-// Utils
-import { COOKIE_CONFIG, ADMIN_CREDENTIALS, MESSAGES } from './utils/constants';
+  return (
+    <div className={`p-6 ${tema.fundo} min-h-screen`}>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className={`text-3xl font-bold ${tema.texto}`}>
+            Dashboard - Bem-vindo, {usuarioLogado?.nome || 'Usuário'}!
+          </h1>
+          <p className={`mt-2 ${tema.textoSecundario}`}>
+            Tipo de usuário: {tipoUsuario}
+          </p>
+        </div>
 
-// Types
-import { TipoUsuario } from './types/Common';
-import { Vendedor } from './types/Vendedor';
+        {/* Cards de estatísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
+            <h3 className={`text-lg font-semibold ${tema.texto}`}>Vendedores</h3>
+            <p className="text-3xl font-bold text-blue-600">{vendedores.length}</p>
+            <p className={`text-sm ${tema.textoSecundario}`}>Total cadastrados</p>
+          </div>
+          
+          <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
+            <h3 className={`text-lg font-semibold ${tema.texto}`}>Produtos</h3>
+            <p className="text-3xl font-bold text-green-600">{produtos.length}</p>
+            <p className={`text-sm ${tema.textoSecundario}`}>Total cadastrados</p>
+          </div>
+          
+          <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
+            <h3 className={`text-lg font-semibold ${tema.texto}`}>Consignações</h3>
+            <p className="text-3xl font-bold text-purple-600">{consignacoes.length}</p>
+            <p className={`text-sm ${tema.textoSecundario}`}>Total registradas</p>
+          </div>
+          
+          <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
+            <h3 className={`text-lg font-semibold ${tema.texto}`}>Consignações Ativas</h3>
+            <p className="text-3xl font-bold text-orange-600">
+              {consignacoes.filter(c => c.status === 'ativa').length}
+            </p>
+            <p className={`text-sm ${tema.textoSecundario}`}>Em andamento</p>
+          </div>
+        </div>
 
-/**
- * Componente principal da aplicação
- */
+        {/* Informações adicionais */}
+        <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
+          <h2 className={`text-xl font-semibold ${tema.texto} mb-4`}>Sistema de Consignação</h2>
+          <p className={`${tema.textoSecundario} mb-4`}>
+            Este é um sistema simplificado temporário. As funcionalidades completas serão implementadas gradualmente.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className={`font-medium ${tema.texto} mb-2`}>Funcionalidades Disponíveis:</h3>
+              <ul className={`text-sm ${tema.textoSecundario} space-y-1`}>
+                <li>• Login de usuários</li>
+                <li>• Dashboard com estatísticas básicas</li>
+                <li>• Visualização de dados</li>
+                <li>• Sistema de temas</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className={`font-medium ${tema.texto} mb-2`}>Próximas Implementações:</h3>
+              <ul className={`text-sm ${tema.textoSecundario} space-y-1`}>
+                <li>• Gestão completa de vendedores</li>
+                <li>• Gestão completa de produtos</li>
+                <li>• Gestão completa de consignações</li>
+                <li>• Relatórios e filtros</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente principal da aplicação
 const AppContent: React.FC = () => {
   const { 
     usuarioLogado, 
     setUsuarioLogado,
-    tipoUsuario, 
     setTipoUsuario,
-    temaEscuro,
-    setTemaEscuro,
-    tema,
     vendedores,
-    mostrarMensagem,
-    cookies
+    mostrarMensagem 
   } = useAppContext();
-
-  // Estados locais do App
-  const [telaAtiva, setTelaAtiva] = useState('dashboard');
-  const [menuAberto, setMenuAberto] = useState(false);
-  const [mensagem, setMensagem] = useState<{tipo: 'success' | 'error', texto: string} | null>(null);
-
-  // Hook de cookies para funcionalidades específicas do App
-  const { setCookie, getCookie } = useCookies();
-
-  // Carrega preferências salvas
-  useEffect(() => {
-    if (usuarioLogado) {
-      // Restaurar última tela ativa
-      const ultimaTela = getCookie(COOKIE_CONFIG.ULTIMA_TELA_ATIVA);
-      
-      if (tipoUsuario === 'admin') {
-        if (ultimaTela && ['dashboard', 'consignacoes', 'vendedores', 'produtos', 'categorias'].includes(ultimaTela)) {
-          setTelaAtiva(ultimaTela);
-        }
-      } else if (tipoUsuario === 'vendedor') {
-        if (ultimaTela && ['dashboard', 'consignacoes'].includes(ultimaTela)) {
-          setTelaAtiva(ultimaTela);
-        } else {
-          setTelaAtiva('consignacoes'); // Vendedores iniciam nas consignações
-        }
-      }
-    }
-  }, [usuarioLogado, tipoUsuario, getCookie]);
-
-  // Salva preferências quando mudam
-  useEffect(() => {
-    if (usuarioLogado) {
-      setCookie(COOKIE_CONFIG.ULTIMA_TELA_ATIVA, telaAtiva, 7);
-      setCookie(COOKIE_CONFIG.ULTIMO_TIPO_USUARIO, tipoUsuario || '', 7);
-    }
-  }, [telaAtiva, tipoUsuario, usuarioLogado, setCookie]);
 
   // Função de login
   const fazerLogin = useCallback((login: string, senha: string) => {
-    // Verificar credenciais do admin
-    if (login === ADMIN_CREDENTIALS.LOGIN && senha === ADMIN_CREDENTIALS.SENHA) {
-      const usuario = { 
-        id: 0, 
-        nome: ADMIN_CREDENTIALS.NOME, 
-        login: ADMIN_CREDENTIALS.LOGIN 
-      };
-      setUsuarioLogado(usuario);
+    // Verificar admin
+    if (login === 'admin' && senha === 'admin123') {
+      setUsuarioLogado({ id: 0, nome: 'Administrador', login: 'admin' });
       setTipoUsuario('admin');
-      
-      // Salvar informações do login
-      setCookie(COOKIE_CONFIG.ULTIMO_LOGIN, login, 30);
-      setCookie(COOKIE_CONFIG.ULTIMO_LOGIN_TEMPO, new Date().toISOString(), 7);
-      
+      mostrarMensagem('success', 'Login realizado com sucesso!');
       return;
     }
 
-    // Verificar credenciais dos vendedores
-    const vendedor = vendedores.find((v: Vendedor) => 
+    // Verificar vendedores
+    const vendedor = vendedores.find(v => 
       v.login === login && 
       v.senha === senha && 
       v.status === 'Ativo'
@@ -112,122 +162,22 @@ const AppContent: React.FC = () => {
     if (vendedor) {
       setUsuarioLogado(vendedor);
       setTipoUsuario('vendedor');
-      
-      // Salvar informações do login
-      setCookie(COOKIE_CONFIG.ULTIMO_LOGIN, login, 30);
-      setCookie(COOKIE_CONFIG.ULTIMO_LOGIN_TEMPO, new Date().toISOString(), 7);
+      mostrarMensagem('success', 'Login realizado com sucesso!');
     } else {
-      mostrarMensagem('error', MESSAGES.ERROR.LOGIN_INVALIDO);
+      mostrarMensagem('error', 'Login ou senha inválidos!');
     }
-  }, [vendedores, setUsuarioLogado, setTipoUsuario, setCookie, mostrarMensagem]);
-
-  // Função de logout
-  const fazerLogout = useCallback(() => {
-    setUsuarioLogado(null);
-    setTipoUsuario(null);
-    setTelaAtiva('dashboard');
-    
-    // Limpar cookies da sessão
-    setCookie(COOKIE_CONFIG.ULTIMA_TELA_ATIVA, '', -1);
-    setCookie(COOKIE_CONFIG.ULTIMO_TIPO_USUARIO, '', -1);
-    setCookie(COOKIE_CONFIG.ULTIMO_LOGIN_TEMPO, '', -1);
-    
-    mostrarMensagem('success', MESSAGES.SUCCESS.LOGOUT);
-  }, [setUsuarioLogado, setTipoUsuario, setCookie, mostrarMensagem]);
-
-  // Função para mudar tela
-  const mudarTela = useCallback((tela: string) => {
-    setTelaAtiva(tela);
-  }, []);
-
-  // Funções do menu
-  const fecharMenu = useCallback(() => {
-    setMenuAberto(false);
-  }, []);
-
-  const toggleMenu = useCallback(() => {
-    setMenuAberto((prev: boolean) => !prev);
-  }, []);
-
-  // Função para alternar tema
-  const toggleTema = useCallback(() => {
-    setTemaEscuro((prev: boolean) => !prev);
-  }, [setTemaEscuro]);
-
-  // Renderizar conteúdo baseado na tela ativa
-  const renderConteudo = useCallback(() => {
-    switch (telaAtiva) {
-      case 'consignacoes':
-        return <TelaConsignacoes />;
-      case 'vendedores':
-        return tipoUsuario === 'admin' ? <TelaVendedores /> : <Dashboard />;
-      case 'produtos':
-        return tipoUsuario === 'admin' ? <TelaProdutos /> : <Dashboard />;
-      case 'categorias':
-        return tipoUsuario === 'admin' ? <TelaCategorias /> : <Dashboard />;
-      default:
-        return <Dashboard />;
-    }
-  }, [telaAtiva, tipoUsuario]);
+  }, [vendedores, setUsuarioLogado, setTipoUsuario, mostrarMensagem]);
 
   // Se não está logado, mostrar tela de login
   if (!usuarioLogado) {
-    return (
-      <Login 
-        onLogin={fazerLogin}
-        temaEscuro={temaEscuro}
-        onToggleTema={toggleTema}
-      />
-    );
+    return <Login onLogin={fazerLogin} />;
   }
 
-  // Renderizar aplicação principal
-  return (
-    <div className={`min-h-screen ${tema.fundo} flex`}>
-      {/* Backdrop para mobile */}
-      {menuAberto && (
-        <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
-          onClick={fecharMenu}
-        />
-      )}
-
-      {/* Menu Lateral */}
-      <MenuLateral 
-        telaAtiva={telaAtiva}
-        onMudarTela={mudarTela}
-        menuAberto={menuAberto}
-        onFecharMenu={fecharMenu}
-        tipoUsuario={tipoUsuario}
-        usuarioLogado={usuarioLogado}
-        onToggleTema={toggleTema}
-        onLogout={fazerLogout}
-        temaEscuro={temaEscuro}
-      />
-
-      {/* Conteúdo Principal */}
-      <div className="flex-1 lg:ml-0">
-        {/* Header Mobile */}
-        <Header 
-          menuAberto={menuAberto}
-          onToggleMenu={toggleMenu}
-        />
-
-        {/* Área de Conteúdo */}
-        <main className="min-h-screen">
-          {renderConteudo()}
-        </main>
-      </div>
-
-      {/* Componente de Mensagens */}
-      <Mensagem mensagem={mensagem} />
-    </div>
-  );
+  // Renderizar dashboard
+  return <Dashboard />;
 };
 
-/**
- * Componente App com Provider
- */
+// Componente App com Provider
 const App: React.FC = () => {
   return (
     <AppProvider>
