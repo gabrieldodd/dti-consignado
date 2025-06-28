@@ -3,23 +3,30 @@ import React, { useMemo } from 'react';
 import { 
   Users, 
   Package, 
-  AlertTriangle, 
+  ShoppingCart, 
   DollarSign, 
-  Tags, 
-  ShoppingCart,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Archive
+  TrendingUp, 
+  TrendingDown, 
+  AlertTriangle, 
+  Tags,
+  Eye,
+  Plus
 } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
-import { Vendedor } from '../../types/Vendedor';
-import { Produto } from '../../types/Produto';
-import { Categoria } from '../../types/Categoria';
-import { Consignacao } from '../../types/Consignacao';
+
+interface EstatisticasCard {
+  titulo: string;
+  valor: number;
+  total?: number;
+  icon: React.ElementType;
+  cor: string;
+  formato: 'numero' | 'moeda';
+  subtitulo?: string;
+  tendencia?: 'up' | 'down';
+  alerta?: number | null;
+  urgente?: boolean;
+}
 
 export const Dashboard: React.FC = () => {
   // Context e Hooks
@@ -35,54 +42,51 @@ export const Dashboard: React.FC = () => {
   
   const { formatarMoedaBR, formatarNumero } = useFormatters();
 
-  // Calcular Estatísticas
+  // Cálculo das Estatísticas
   const estatisticas = useMemo(() => {
     // Vendedores
-    const vendedoresAtivos = vendedores.filter((v: Vendedor) => v.status === 'Ativo').length;
-    const vendedoresInativos = vendedores.filter((v: Vendedor) => v.status === 'Inativo').length;
-
-    // Produtos
-    const produtosAtivos = produtos.filter((p: Produto) => p.ativo).length;
-    const produtosInativos = produtos.filter((p: Produto) => !p.ativo).length;
-    const produtosEstoqueBaixo = produtos.filter((p: Produto) => 
-      p.ativo && p.estoque <= p.estoqueMinimo
-    ).length;
+    const vendedoresAtivos = vendedores.filter(v => v.status === 'Ativo').length;
+    const vendedoresInativos = vendedores.filter(v => v.status === 'Inativo').length;
     
-    // Valores
+    // Produtos
+    const produtosAtivos = produtos.filter(p => p.ativo).length;
+    const produtosInativos = produtos.filter(p => !p.ativo).length;
+    const produtosEstoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length;
+    
     const valorTotalEstoque = produtos
-      .filter((p: Produto) => p.ativo)
-      .reduce((total: number, p: Produto) => total + (p.valorVenda * p.estoque), 0);
+      .filter(p => p.ativo)
+      .reduce((total, p) => total + (p.valorCusto * p.estoque), 0);
     
     const itensEstoque = produtos
-      .filter((p: Produto) => p.ativo)
-      .reduce((total: number, p: Produto) => total + p.estoque, 0);
-
+      .filter(p => p.ativo)
+      .reduce((total, p) => total + p.estoque, 0);
+    
     // Categorias
-    const categoriasAtivas = categorias.filter((c: Categoria) => c.ativa).length;
-    const categoriasInativas = categorias.filter((c: Categoria) => !c.ativa).length;
-
+    const categoriasAtivas = categorias.filter(c => c.ativa).length;
+    const categoriasInativas = categorias.filter(c => !c.ativa).length;
+    
     // Consignações
-    const consignacaoesAtivas = consignacoes.filter((c: Consignacao) => c.status === 'ativa').length;
-    const consignacaoesFinalizadas = consignacoes.filter((c: Consignacao) => c.status === 'finalizada').length;
-    const consignacoesCanceladas = consignacoes.filter((c: Consignacao) => c.status === 'cancelada').length;
+    const consignacaoesAtivas = consignacoes.filter(c => c.status === 'ativa').length;
+    const consignacaoesFinalizadas = consignacoes.filter(c => c.status === 'finalizada').length;
+    const consignacoesCanceladas = consignacoes.filter(c => c.status === 'cancelada').length;
     
     const valorConsignacaoesAtivas = consignacoes
-      .filter((c: Consignacao) => c.status === 'ativa')
-      .reduce((total: number, c: Consignacao) => total + c.valorTotal, 0);
+      .filter(c => c.status === 'ativa')
+      .reduce((total, c) => total + c.valorTotal, 0);
     
     const quantidadeTotalConsignada = consignacoes
-      .filter((c: Consignacao) => c.status === 'ativa')
-      .reduce((total: number, c: Consignacao) => total + c.quantidadeTotal, 0);
-
-    // Consignações do usuário (se for vendedor)
+      .filter(c => c.status === 'ativa')
+      .reduce((total, c) => total + c.quantidadeTotal, 0);
+    
+    // Para vendedores específicos
     const minhasConsignacoes = tipoUsuario === 'vendedor' 
-      ? consignacoes.filter((c: Consignacao) => c.vendedorId === usuarioLogado?.id)
+      ? consignacoes.filter(c => c.vendedorId === usuarioLogado?.id)
       : [];
     
-    const minhasConsignacaoesAtivas = minhasConsignacoes.filter((c: Consignacao) => c.status === 'ativa').length;
+    const minhasConsignacaoesAtivas = minhasConsignacoes.filter(c => c.status === 'ativa').length;
     const valorMinhasConsignacoes = minhasConsignacoes
-      .filter((c: Consignacao) => c.status === 'ativa')
-      .reduce((total: number, c: Consignacao) => total + c.valorTotal, 0);
+      .filter(c => c.status === 'ativa')
+      .reduce((total, c) => total + c.valorTotal, 0);
 
     return {
       // Vendedores
@@ -118,7 +122,7 @@ export const Dashboard: React.FC = () => {
   }, [vendedores, produtos, categorias, consignacoes, tipoUsuario, usuarioLogado]);
 
   // Cards de Estatísticas para Admin
-  const cardsAdmin = [
+  const cardsAdmin: EstatisticasCard[] = [
     {
       titulo: 'Vendedores Ativos',
       valor: estatisticas.vendedoresAtivos,
@@ -173,7 +177,7 @@ export const Dashboard: React.FC = () => {
   ];
 
   // Cards de Estatísticas para Vendedor
-  const cardsVendedor = [
+  const cardsVendedor: EstatisticasCard[] = [
     {
       titulo: 'Minhas Consignações Ativas',
       valor: estatisticas.minhasConsignacaoesAtivas,
@@ -228,54 +232,68 @@ export const Dashboard: React.FC = () => {
           </h1>
           <p className={`mt-2 ${tema.textoSecundario}`}>
             Bem-vindo, {usuarioLogado?.nome || 'Usuário'}! 
-            {tipoUsuario && (
-              <span className="ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                {tipoUsuario === 'admin' ? 'Administrador' : 'Vendedor'}
-              </span>
-            )}
+            Aqui está um resumo do sistema.
           </p>
         </div>
 
         {/* Cards de Estatísticas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {cards.map((card, index) => (
-            <div key={index} className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda} hover:shadow-md transition-shadow`}>
+            <div
+              key={index}
+              className={`
+                ${tema.papel} rounded-lg border ${tema.borda} p-6 shadow-sm
+                ${card.urgente ? 'ring-2 ring-red-500 ring-opacity-50' : ''}
+                transition-all duration-200 hover:shadow-md
+              `}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className={`text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                    {card.titulo}
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <p className={`text-2xl font-bold ${card.urgente ? 'text-red-600' : tema.texto}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className={`text-sm font-medium ${tema.textoSecundario}`}>
+                      {card.titulo}
+                    </h3>
+                    {card.urgente && (
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                  
+                  <div className="flex items-baseline space-x-2">
+                    <p className={`text-2xl font-bold ${tema.texto}`}>
                       {formatarValor(card.valor, card.formato)}
                     </p>
+                    
                     {card.total && (
                       <span className={`text-sm ${tema.textoSecundario}`}>
-                        / {card.total}
+                        / {formatarNumero(card.total)}
                       </span>
                     )}
+                    
                     {card.tendencia && (
-                      <div className={`flex items-center ${card.tendencia === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                      <div className="flex items-center">
                         {card.tendencia === 'up' ? (
-                          <TrendingUp className="h-4 w-4" />
+                          <TrendingUp className="h-4 w-4 text-green-500" />
                         ) : (
-                          <TrendingDown className="h-4 w-4" />
+                          <TrendingDown className="h-4 w-4 text-red-500" />
                         )}
                       </div>
                     )}
                   </div>
+
                   {card.subtitulo && (
-                    <p className={`text-xs ${tema.textoSecundario} mt-1`}>
+                    <p className={`text-sm ${tema.textoSecundario} mt-1`}>
                       {card.subtitulo}
                     </p>
                   )}
+
                   {card.alerta && (
-                    <p className="text-xs text-red-600 mt-1">
-                      ⚠️ {card.alerta} produto(s) com estoque baixo
+                    <p className="text-sm text-orange-600 mt-1">
+                      ⚠️ {card.alerta} produtos com estoque baixo
                     </p>
                   )}
                 </div>
-                <div className={`p-3 rounded-full ${card.cor}`}>
+
+                <div className={`${card.cor} p-3 rounded-lg`}>
                   <card.icon className="h-6 w-6 text-white" />
                 </div>
               </div>
@@ -283,154 +301,53 @@ export const Dashboard: React.FC = () => {
           ))}
         </div>
 
-        {/* Resumo de Consignações */}
-        {tipoUsuario === 'admin' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Status das Consignações */}
-            <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
-              <h3 className={`text-lg font-semibold ${tema.texto} mb-4 flex items-center`}>
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Status das Consignações
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                  <div className="flex items-center">
-                    <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                    <span className="font-medium text-green-700">Ativas</span>
-                  </div>
-                  <span className="font-bold text-green-700">
-                    {estatisticas.consignacaoesAtivas}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center">
-                    <Archive className="h-5 w-5 text-blue-500 mr-2" />
-                    <span className="font-medium text-blue-700">Finalizadas</span>
-                  </div>
-                  <span className="font-bold text-blue-700">
-                    {estatisticas.consignacaoesFinalizadas}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                  <div className="flex items-center">
-                    <XCircle className="h-5 w-5 text-red-500 mr-2" />
-                    <span className="font-medium text-red-700">Canceladas</span>
-                  </div>
-                  <span className="font-bold text-red-700">
-                    {estatisticas.consignacoesCanceladas}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Produtos com Estoque Baixo */}
-            <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
-              <h3 className={`text-lg font-semibold ${tema.texto} mb-4 flex items-center`}>
-                <AlertTriangle className="h-5 w-5 mr-2 text-red-500" />
-                Alertas de Estoque
-              </h3>
-              {estatisticas.produtosEstoqueBaixo > 0 ? (
-                <div className="space-y-3">
-                  {produtos
-                    .filter((p: Produto) => p.ativo && p.estoque <= p.estoqueMinimo)
-                    .slice(0, 5)
-                    .map((produto: Produto) => (
-                      <div key={produto.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-red-700">{produto.nome}</p>
-                          <p className="text-sm text-red-600">
-                            Estoque: {produto.estoque} / Mínimo: {produto.estoqueMinimo}
-                          </p>
-                        </div>
-                        <div className="text-red-600">
-                          <AlertTriangle className="h-5 w-5" />
-                        </div>
-                      </div>
-                    ))}
-                  {estatisticas.produtosEstoqueBaixo > 5 && (
-                    <p className={`text-sm ${tema.textoSecundario} text-center`}>
-                      E mais {estatisticas.produtosEstoqueBaixo - 5} produto(s)...
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <CheckCircle className={`mx-auto h-12 w-12 text-green-500 mb-2`} />
-                  <p className="text-green-700 font-medium">Todos os produtos com estoque adequado!</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Informações do Sistema */}
-        <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
-          <h3 className={`text-lg font-semibold ${tema.texto} mb-4`}>
-            Sistema de Consignação
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className={`font-medium ${tema.texto} mb-3`}>Funcionalidades Disponíveis:</h4>
-              <ul className={`text-sm ${tema.textoSecundario} space-y-2`}>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Sistema de login e autenticação
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Dashboard com estatísticas em tempo real
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  {tipoUsuario === 'admin' ? 'Gestão completa de vendedores' : 'Visualização de vendedores'}
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Gestão de produtos e categorias
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Sistema de consignações
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Alertas de estoque baixo
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  Temas claro e escuro
-                </li>
-              </ul>
-            </div>
+        {/* Ações Rápidas */}
+        <div className={`${tema.papel} rounded-lg border ${tema.borda} p-6 shadow-sm`}>
+          <h2 className={`text-xl font-semibold ${tema.texto} mb-4`}>
+            Ações Rápidas
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button className="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200 border border-blue-200">
+              <Plus className="h-5 w-5 text-blue-600 mr-3" />
+              <span className="text-blue-700 font-medium">Nova Consignação</span>
+            </button>
             
-            <div>
-              <h4 className={`font-medium ${tema.texto} mb-3`}>Ações Rápidas:</h4>
-              <div className="space-y-2">
-                {tipoUsuario === 'admin' && (
-                  <>
-                    <button className="w-full text-left px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors">
-                      → Criar novo vendedor
-                    </button>
-                    <button className="w-full text-left px-3 py-2 text-sm bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors">
-                      → Adicionar produto
-                    </button>
-                    <button className="w-full text-left px-3 py-2 text-sm bg-purple-50 text-purple-700 rounded hover:bg-purple-100 transition-colors">
-                      → Nova categoria
-                    </button>
-                  </>
-                )}
-                <button className="w-full text-left px-3 py-2 text-sm bg-orange-50 text-orange-700 rounded hover:bg-orange-100 transition-colors">
-                  → Nova consignação
+            {tipoUsuario === 'admin' && (
+              <>
+                <button className="flex items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200 border border-green-200">
+                  <Plus className="h-5 w-5 text-green-600 mr-3" />
+                  <span className="text-green-700 font-medium">Novo Produto</span>
                 </button>
-                {estatisticas.produtosEstoqueBaixo > 0 && (
-                  <button className="w-full text-left px-3 py-2 text-sm bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors">
-                    → Ver produtos com estoque baixo ({estatisticas.produtosEstoqueBaixo})
-                  </button>
-                )}
-              </div>
-            </div>
+                
+                <button className="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200 border border-purple-200">
+                  <Plus className="h-5 w-5 text-purple-600 mr-3" />
+                  <span className="text-purple-700 font-medium">Novo Vendedor</span>
+                </button>
+              </>
+            )}
+            
+            <button className="flex items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors duration-200 border border-orange-200">
+              <Eye className="h-5 w-5 text-orange-600 mr-3" />
+              <span className="text-orange-700 font-medium">Ver Relatórios</span>
+            </button>
           </div>
         </div>
+
+        {/* Alertas se houver produtos com estoque baixo */}
+        {estatisticas.produtosEstoqueBaixo > 0 && (
+          <div className="mt-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-orange-600 mr-2" />
+              <h3 className="text-orange-800 font-medium">
+                Atenção: Produtos com Estoque Baixo
+              </h3>
+            </div>
+            <p className="text-orange-700 text-sm mt-1">
+              {estatisticas.produtosEstoqueBaixo} produto(s) estão com estoque baixo. 
+              Verifique a seção de produtos para mais detalhes.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

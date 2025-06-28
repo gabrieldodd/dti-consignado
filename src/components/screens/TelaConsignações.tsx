@@ -15,14 +15,14 @@ import {
   XCircle,
   User,
   Phone,
-  FileText
+  FileText,
+  X,
+  Save,
+  ArrowLeft
 } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
-import { Consignacao } from '../../types/Consignacao';
-import { Vendedor } from '../../types/Vendedor';
-import { Produto } from '../../types/Produto';
 
 interface ConsignacaoForm {
   clienteNome: string;
@@ -35,9 +35,21 @@ interface ConsignacaoForm {
   observacoes: string;
 }
 
+interface ProdutoConsignacao {
+  produtoId: number;
+  produto: any;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
+}
+
 interface RetornoForm {
-  quantidadeRetornada: number;
-  valorRetornado: number;
+  produtos: {
+    produtoId: number;
+    quantidadeRetornada: number;
+    quantidadeVendida: number;
+  }[];
+  observacoes: string;
 }
 
 export const TelaConsignacoes: React.FC = () => {
@@ -62,11 +74,15 @@ export const TelaConsignacoes: React.FC = () => {
   const [modalRetornoAberto, setModalRetornoAberto] = useState(false);
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [consignacaoEditando, setConsignacaoEditando] = useState<Consignacao | null>(null);
-  const [consignacaoRetorno, setConsignacaoRetorno] = useState<Consignacao | null>(null);
-  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<Consignacao | null>(null);
-  const [consignacaoParaExcluir, setConsignacaoParaExcluir] = useState<Consignacao | null>(null);
+  const [consignacaoEditando, setConsignacaoEditando] = useState<any>(null);
+  const [consignacaoRetorno, setConsignacaoRetorno] = useState<any>(null);
+  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<any>(null);
+  const [consignacaoParaExcluir, setConsignacaoParaExcluir] = useState<any>(null);
   const [salvando, setSalvando] = useState(false);
+
+  // Estados para QR Code
+  const [leituraQR, setLeituraQR] = useState(false);
+  const [codigoQR, setCodigoQR] = useState('');
 
   // Filtros e Busca
   const [buscaTexto, setBuscaTexto] = useState('');
@@ -91,37 +107,37 @@ export const TelaConsignacoes: React.FC = () => {
     observacoes: ''
   });
 
+  const [produtosConsignacao, setProdutosConsignacao] = useState<ProdutoConsignacao[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Estados para retorno
-  const [retornoForm, setRetornoForm] = useState<RetornoForm>({
-    quantidadeRetornada: 0,
-    valorRetornado: 0
+  // Formulário de Retorno
+  const [formRetorno, setFormRetorno] = useState<RetornoForm>({
+    produtos: [],
+    observacoes: ''
   });
-  const [codigoLeitura, setCodigoLeitura] = useState('');
-  const [produtosLidos, setProdutosLidos] = useState<{produto: Produto, quantidade: number}[]>([]);
 
   // Dados Filtrados
   const consignacoesFiltradas = useMemo(() => {
     let resultado = consignacoes;
 
-    // Filtro por vendedor (se for vendedor)
+    // Filtrar por vendedor se for vendedor
     if (tipoUsuario === 'vendedor') {
-      resultado = resultado.filter((c: Consignacao) => c.vendedorId === usuarioLogado?.id);
+      resultado = resultado.filter(c => c.vendedorId === usuarioLogado?.id);
     }
 
     // Filtro por status
     if (filtroStatus !== 'todas') {
-      resultado = resultado.filter((c: Consignacao) => c.status === filtroStatus);
+      resultado = resultado.filter(c => c.status === filtroStatus);
     }
 
     // Filtro por busca
     if (buscaTexto.trim()) {
       const busca = buscaTexto.toLowerCase().trim();
-      resultado = resultado.filter((c: Consignacao) => 
+      resultado = resultado.filter(c => 
         c.clienteNome.toLowerCase().includes(busca) ||
         c.clienteDocumento.includes(busca) ||
-        c.vendedor.nome.toLowerCase().includes(busca)
+        c.vendedor.nome.toLowerCase().includes(busca) ||
+        c.id.toString().includes(busca)
       );
     }
 
@@ -129,9 +145,9 @@ export const TelaConsignacoes: React.FC = () => {
   }, [consignacoes, tipoUsuario, usuarioLogado, filtroStatus, buscaTexto]);
 
   // Funções de Modal
-  const abrirModal = useCallback((consignacao?: Consignacao) => {
+  const abrirModal = useCallback((consignacao = null) => {
+    setConsignacaoEditando(consignacao);
     if (consignacao) {
-      setConsignacaoEditando(consignacao);
       setFormConsignacao({
         clienteNome: consignacao.clienteNome,
         clienteDocumento: consignacao.clienteDocumento,
@@ -143,7 +159,6 @@ export const TelaConsignacoes: React.FC = () => {
         observacoes: consignacao.observacoes || ''
       });
     } else {
-      setConsignacaoEditando(null);
       setFormConsignacao({
         clienteNome: '',
         clienteDocumento: '',
@@ -154,6 +169,7 @@ export const TelaConsignacoes: React.FC = () => {
         valorTotal: '',
         observacoes: ''
       });
+      setProdutosConsignacao([]);
     }
     setFormErrors({});
     setModalAberto(true);
@@ -162,142 +178,135 @@ export const TelaConsignacoes: React.FC = () => {
   const fecharModal = useCallback(() => {
     setModalAberto(false);
     setConsignacaoEditando(null);
-    setSalvando(false);
+    setProdutosConsignacao([]);
+    setFormErrors({});
   }, []);
 
-  const abrirModalRetorno = useCallback((consignacao: Consignacao) => {
-    setConsignacaoRetorno(consignacao);
-    setRetornoForm({
-      quantidadeRetornada: 0,
-      valorRetornado: 0
-    });
-    setProdutosLidos([]);
-    setCodigoLeitura('');
-    setModalRetornoAberto(true);
+  // Adicionar produto à consignação
+  const adicionarProduto = useCallback(() => {
+    const novoProduto: ProdutoConsignacao = {
+      produtoId: 0,
+      produto: null,
+      quantidade: 1,
+      valorUnitario: 0,
+      valorTotal: 0
+    };
+    setProdutosConsignacao(prev => [...prev, novoProduto]);
   }, []);
 
-  const fecharModalRetorno = useCallback(() => {
-    setModalRetornoAberto(false);
-    setConsignacaoRetorno(null);
+  const removerProduto = useCallback((index: number) => {
+    setProdutosConsignacao(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const abrirModalDetalhes = useCallback((consignacao: Consignacao) => {
-    setConsignacaoDetalhes(consignacao);
-    setModalDetalhesAberto(true);
-  }, []);
+  const atualizarProduto = useCallback((index: number, campo: string, valor: any) => {
+    setProdutosConsignacao(prev => prev.map((produto, i) => {
+      if (i === index) {
+        const produtoAtualizado = { ...produto, [campo]: valor };
+        
+        if (campo === 'produtoId') {
+          const produtoSelecionado = produtos.find(p => p.id === parseInt(valor));
+          produtoAtualizado.produto = produtoSelecionado;
+          produtoAtualizado.valorUnitario = produtoSelecionado?.valorVenda || 0;
+        }
+        
+        if (campo === 'quantidade' || campo === 'valorUnitario') {
+          produtoAtualizado.valorTotal = produtoAtualizado.quantidade * produtoAtualizado.valorUnitario;
+        }
+        
+        return produtoAtualizado;
+      }
+      return produto;
+    }));
+  }, [produtos]);
 
-  const fecharModalDetalhes = useCallback(() => {
-    setModalDetalhesAberto(false);
-    setConsignacaoDetalhes(null);
-  }, []);
+  // Calcular totais
+  const totaisConsignacao = useMemo(() => {
+    const quantidadeTotal = produtosConsignacao.reduce((total, produto) => total + produto.quantidade, 0);
+    const valorTotal = produtosConsignacao.reduce((total, produto) => total + produto.valorTotal, 0);
+    return { quantidadeTotal, valorTotal };
+  }, [produtosConsignacao]);
 
-  const abrirModalExclusao = useCallback((consignacao: Consignacao) => {
-    setConsignacaoParaExcluir(consignacao);
-    setModalExclusaoAberto(true);
-  }, []);
-
-  const fecharModalExclusao = useCallback(() => {
-    setModalExclusaoAberto(false);
-    setConsignacaoParaExcluir(null);
-  }, []);
-
-  // Validação do Formulário
+  // Validação do formulário
   const validarFormulario = useCallback(() => {
     const errors: Record<string, string> = {};
 
-    // Nome do cliente
     if (!formConsignacao.clienteNome.trim()) {
       errors.clienteNome = 'Nome do cliente é obrigatório';
     }
 
-    // Documento
     if (!formConsignacao.clienteDocumento.trim()) {
-      errors.clienteDocumento = `${formConsignacao.tipoDocumento.toUpperCase()} é obrigatório`;
+      errors.clienteDocumento = 'Documento do cliente é obrigatório';
     } else {
-      const validador = formConsignacao.tipoDocumento === 'cpf' ? validarCPF : validarCNPJ;
-      if (!validador(formConsignacao.clienteDocumento)) {
-        errors.clienteDocumento = `${formConsignacao.tipoDocumento.toUpperCase()} inválido`;
+      if (formConsignacao.tipoDocumento === 'cpf' && !validarCPF(formConsignacao.clienteDocumento)) {
+        errors.clienteDocumento = 'CPF inválido';
+      } else if (formConsignacao.tipoDocumento === 'cnpj' && !validarCNPJ(formConsignacao.clienteDocumento)) {
+        errors.clienteDocumento = 'CNPJ inválido';
       }
     }
 
-    // Telefone
     if (!formConsignacao.clienteTelefone.trim()) {
-      errors.clienteTelefone = 'Telefone é obrigatório';
+      errors.clienteTelefone = 'Telefone do cliente é obrigatório';
     } else if (!validarTelefone(formConsignacao.clienteTelefone)) {
       errors.clienteTelefone = 'Telefone inválido';
     }
 
-    // Vendedor
     if (!formConsignacao.vendedorId) {
       errors.vendedorId = 'Vendedor é obrigatório';
     }
 
-    // Quantidade
-    const quantidade = parseInt(formConsignacao.quantidadeTotal);
-    if (!formConsignacao.quantidadeTotal || isNaN(quantidade) || quantidade <= 0) {
-      errors.quantidadeTotal = 'Quantidade deve ser maior que zero';
-    }
-
-    // Valor
-    const valor = parseFloat(formConsignacao.valorTotal);
-    if (!formConsignacao.valorTotal || isNaN(valor) || valor <= 0) {
-      errors.valorTotal = 'Valor deve ser maior que zero';
+    if (produtosConsignacao.length === 0) {
+      errors.produtos = 'Adicione pelo menos um produto';
+    } else {
+      const produtosSemDados = produtosConsignacao.some(p => !p.produtoId || p.quantidade <= 0);
+      if (produtosSemDados) {
+        errors.produtos = 'Todos os produtos devem ter dados válidos';
+      }
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formConsignacao, validarCPF, validarCNPJ, validarTelefone]);
+  }, [formConsignacao, produtosConsignacao, validarCPF, validarCNPJ, validarTelefone]);
 
-  // Salvar Consignação
+  // Salvar consignação
   const salvarConsignacao = useCallback(async () => {
     if (!validarFormulario()) return;
 
     setSalvando(true);
+    
     try {
-      const vendedor = vendedores.find((v: Vendedor) => v.id === parseInt(formConsignacao.vendedorId));
-      if (!vendedor) {
-        mostrarMensagem('error', 'Vendedor não encontrado');
-        return;
-      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const vendedor = vendedores.find(v => v.id === parseInt(formConsignacao.vendedorId));
+      const dadosConsignacao = {
+        clienteNome: formConsignacao.clienteNome,
+        clienteDocumento: formConsignacao.clienteDocumento,
+        clienteTelefone: formConsignacao.clienteTelefone,
+        tipoDocumento: formConsignacao.tipoDocumento as 'cpf' | 'cnpj',
+        vendedorId: parseInt(formConsignacao.vendedorId),
+        vendedor: vendedor!,
+        quantidadeTotal: totaisConsignacao.quantidadeTotal,
+        valorTotal: totaisConsignacao.valorTotal,
+        status: 'ativa' as const,
+        observacoes: formConsignacao.observacoes,
+        produtos: produtosConsignacao
+      };
 
       if (consignacaoEditando) {
-        // Atualizar consignação existente
-        const consignacaoAtualizada: Consignacao = {
-          ...consignacaoEditando,
-          clienteNome: formConsignacao.clienteNome.trim(),
-          clienteDocumento: formConsignacao.clienteDocumento,
-          clienteTelefone: formConsignacao.clienteTelefone,
-          tipoDocumento: formConsignacao.tipoDocumento,
-          vendedorId: parseInt(formConsignacao.vendedorId),
-          vendedor: vendedor,
-          quantidadeTotal: parseInt(formConsignacao.quantidadeTotal),
-          valorTotal: parseFloat(formConsignacao.valorTotal),
-          observacoes: formConsignacao.observacoes.trim() || undefined
-        };
-        
-        setConsignacoes((prev: Consignacao[]) => 
-          prev.map(c => c.id === consignacaoEditando.id ? consignacaoAtualizada : c)
-        );
+        // Editar consignação existente
+        setConsignacoes(prev => prev.map(c => 
+          c.id === consignacaoEditando.id 
+            ? { ...c, ...dadosConsignacao }
+            : c
+        ));
         mostrarMensagem('success', 'Consignação atualizada com sucesso!');
       } else {
         // Criar nova consignação
-        const novoId = Math.max(...consignacoes.map((c: Consignacao) => c.id), 0) + 1;
-        const novaConsignacao: Consignacao = {
-          id: novoId,
-          clienteNome: formConsignacao.clienteNome.trim(),
-          clienteDocumento: formConsignacao.clienteDocumento,
-          clienteTelefone: formConsignacao.clienteTelefone,
-          tipoDocumento: formConsignacao.tipoDocumento,
-          vendedorId: parseInt(formConsignacao.vendedorId),
-          vendedor: vendedor,
-          quantidadeTotal: parseInt(formConsignacao.quantidadeTotal),
-          valorTotal: parseFloat(formConsignacao.valorTotal),
-          dataConsignacao: new Date().toISOString().split('T')[0],
-          status: 'ativa',
-          observacoes: formConsignacao.observacoes.trim() || undefined
+        const novaConsignacao = {
+          id: Math.max(...consignacoes.map(c => c.id), 0) + 1,
+          ...dadosConsignacao,
+          dataConsignacao: new Date().toISOString().split('T')[0]
         };
-        
-        setConsignacoes((prev: Consignacao[]) => [...prev, novaConsignacao]);
+        setConsignacoes(prev => [...prev, novaConsignacao]);
         mostrarMensagem('success', 'Consignação criada com sucesso!');
       }
 
@@ -307,110 +316,95 @@ export const TelaConsignacoes: React.FC = () => {
     } finally {
       setSalvando(false);
     }
-  }, [formConsignacao, consignacaoEditando, vendedores, consignacoes, setConsignacoes, mostrarMensagem, validarFormulario, fecharModal]);
+  }, [formConsignacao, produtosConsignacao, totaisConsignacao, vendedores, consignacaoEditando, consignacoes, validarFormulario, setConsignacoes, mostrarMensagem, fecharModal]);
 
-  // Excluir Consignação
-  const confirmarExclusao = useCallback(() => {
-    if (!consignacaoParaExcluir) return;
+  // Abrir modal de retorno
+  const abrirModalRetorno = useCallback((consignacao: any) => {
+    setConsignacaoRetorno(consignacao);
+    setFormRetorno({
+      produtos: consignacao.produtos?.map((p: any) => ({
+        produtoId: p.produtoId,
+        quantidadeRetornada: 0,
+        quantidadeVendida: p.quantidade
+      })) || [],
+      observacoes: ''
+    });
+    setModalRetornoAberto(true);
+  }, []);
 
-    setConsignacoes((prev: Consignacao[]) => 
-      prev.filter(c => c.id !== consignacaoParaExcluir.id)
-    );
-    mostrarMensagem('success', `Consignação de "${consignacaoParaExcluir.clienteNome}" excluída com sucesso!`);
-    fecharModalExclusao();
-  }, [consignacaoParaExcluir, setConsignacoes, mostrarMensagem, fecharModalExclusao]);
-
-  // Finalizar Consignação com Retorno
-  const finalizarConsignacao = useCallback(() => {
+  // Processar retorno da consignação
+  const processarRetorno = useCallback(async () => {
     if (!consignacaoRetorno) return;
 
-    const quantidadeVendida = consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada;
-    const valorDevido = consignacaoRetorno.valorTotal - retornoForm.valorRetornado;
+    setSalvando(true);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const consignacaoFinalizada: Consignacao = {
-      ...consignacaoRetorno,
-      status: 'finalizada',
-      dataRetorno: new Date().toISOString().split('T')[0],
-      retorno: {
-        quantidadeRetornada: retornoForm.quantidadeRetornada,
-        valorRetornado: retornoForm.valorRetornado,
-        quantidadeVendida: quantidadeVendida,
-        valorDevido: valorDevido
+      const quantidadeRetornada = formRetorno.produtos.reduce((total, p) => total + p.quantidadeRetornada, 0);
+      const quantidadeVendida = formRetorno.produtos.reduce((total, p) => total + p.quantidadeVendida, 0);
+      const valorRetornado = formRetorno.produtos.reduce((total, p) => {
+        const produto = produtos.find(prod => prod.id === p.produtoId);
+        return total + (p.quantidadeRetornada * (produto?.valorVenda || 0));
+      }, 0);
+      const valorDevido = formRetorno.produtos.reduce((total, p) => {
+        const produto = produtos.find(prod => prod.id === p.produtoId);
+        return total + (p.quantidadeVendida * (produto?.valorVenda || 0));
+      }, 0);
+
+      const retorno = {
+        quantidadeRetornada,
+        valorRetornado,
+        quantidadeVendida,
+        valorDevido
+      };
+
+      setConsignacoes(prev => prev.map(c => 
+        c.id === consignacaoRetorno.id 
+          ? { 
+              ...c, 
+              status: 'finalizada' as const,
+              dataRetorno: new Date().toISOString().split('T')[0],
+              retorno
+            }
+          : c
+      ));
+
+      mostrarMensagem('success', 'Retorno processado com sucesso!');
+      setModalRetornoAberto(false);
+      setConsignacaoRetorno(null);
+    } catch (error) {
+      mostrarMensagem('error', 'Erro ao processar retorno');
+    } finally {
+      setSalvando(false);
+    }
+  }, [consignacaoRetorno, formRetorno, produtos, setConsignacoes, mostrarMensagem]);
+
+  // Leitura de QR Code simulada
+  const lerQRCode = useCallback(() => {
+    setLeituraQR(true);
+    // Simular leitura de QR Code
+    setTimeout(() => {
+      const codigoSimulado = '7891234567890'; // Simular código de barras
+      setCodigoQR(codigoSimulado);
+      
+      const produto = produtos.find(p => p.codigoBarras === codigoSimulado);
+      if (produto) {
+        mostrarMensagem('success', `Produto encontrado: ${produto.nome}`);
+        // Adicionar produto ao retorno
+      } else {
+        mostrarMensagem('error', 'Produto não encontrado');
       }
-    };
+      
+      setLeituraQR(false);
+    }, 2000);
+  }, [produtos, mostrarMensagem]);
 
-    setConsignacoes((prev: Consignacao[]) => 
-      prev.map(c => c.id === consignacaoRetorno.id ? consignacaoFinalizada : c)
-    );
-    
-    mostrarMensagem('success', 'Consignação finalizada com sucesso!');
-    fecharModalRetorno();
-  }, [consignacaoRetorno, retornoForm, setConsignacoes, mostrarMensagem, fecharModalRetorno]);
-
-  // Formatação de documento
-  const formatarDocumento = useCallback((valor: string, tipo: 'cpf' | 'cnpj') => {
-    return tipo === 'cpf' ? formatarCPF(valor) : formatarCNPJ(valor);
-  }, [formatarCPF, formatarCNPJ]);
-
-  // Ler código de barras
-  const lerCodigoBarras = useCallback(() => {
-    if (!codigoLeitura.trim()) {
-      mostrarMensagem('error', 'Digite um código de barras');
-      return;
-    }
-
-    const produto = produtos.find((p: Produto) => p.codigoBarras === codigoLeitura.trim() && p.ativo);
-    if (!produto) {
-      mostrarMensagem('error', 'Produto não encontrado ou inativo');
-      setCodigoLeitura('');
-      return;
-    }
-
-    // Verificar se produto já foi lido
-    const produtoJaLido = produtosLidos.find(pl => pl.produto.id === produto.id);
-    if (produtoJaLido) {
-      // Incrementar quantidade
-      setProdutosLidos(prev => 
-        prev.map(pl => 
-          pl.produto.id === produto.id 
-            ? { ...pl, quantidade: pl.quantidade + 1 }
-            : pl
-        )
-      );
-    } else {
-      // Adicionar novo produto
-      setProdutosLidos(prev => [...prev, { produto, quantidade: 1 }]);
-    }
-
-    setCodigoLeitura('');
-    mostrarMensagem('success', `Produto "${produto.nome}" adicionado!`);
-  }, [codigoLeitura, produtos, produtosLidos, mostrarMensagem]);
-
-  // Remover produto lido
-  const removerProdutoLido = useCallback((produtoId: number) => {
-    setProdutosLidos(prev => prev.filter(pl => pl.produto.id !== produtoId));
-    mostrarMensagem('success', 'Produto removido do retorno!');
-  }, [mostrarMensagem]);
-
-  // Calcular totais do retorno
-  const totaisRetorno = useMemo(() => {
-    const quantidadeRetornada = produtosLidos.reduce((total, pl) => total + pl.quantidade, 0);
-    const valorRetornado = produtosLidos.reduce((total, pl) => total + (pl.produto.valorVenda * pl.quantidade), 0);
-    
-    return { quantidadeRetornada, valorRetornado };
-  }, [produtosLidos]);
-
-  // Atualizar form de retorno quando produtos lidos mudarem
-  useEffect(() => {
-    setRetornoForm(totaisRetorno);
-  }, [totaisRetorno]);
-
-  // Render
   return (
     <div className={`p-6 ${tema.fundo} min-h-screen`}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className={`text-3xl font-bold ${tema.texto}`}>Consignações</h1>
             <p className={`mt-2 ${tema.textoSecundario}`}>
@@ -419,7 +413,7 @@ export const TelaConsignacoes: React.FC = () => {
           </div>
           <button
             onClick={() => abrirModal()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors duration-200"
           >
             <Plus className="mr-2 h-4 w-4" />
             Nova Consignação
@@ -428,343 +422,262 @@ export const TelaConsignacoes: React.FC = () => {
 
         {/* Filtros */}
         <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Busca */}
-            <div className="relative md:col-span-2">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
                 placeholder="Buscar consignações..."
                 value={buscaTexto}
                 onChange={(e) => setBuscaTexto(e.target.value)}
-                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
               />
             </div>
             
-            {/* Filtro Status */}
             <select
               value={filtroStatus}
               onChange={(e) => setFiltroStatus(e.target.value)}
-              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
             >
-              <option value="todas">Todas as consignações</option>
-              <option value="ativa">Apenas Ativas</option>
-              <option value="finalizada">Apenas Finalizadas</option>
-              <option value="cancelada">Apenas Canceladas</option>
+              <option value="todas">Todos os Status</option>
+              <option value="ativa">Ativas</option>
+              <option value="finalizada">Finalizadas</option>
+              <option value="cancelada">Canceladas</option>
             </select>
-            
-            {/* Contador */}
-            <div className={`flex items-center text-sm ${tema.textoSecundario}`}>
-              <span className="font-semibold">{consignacoesFiltradas.length}</span>
-              <span className="mx-1">de</span>
-              <span className="font-semibold">{consignacoes.length}</span>
+
+            <div className={`flex items-center ${tema.textoSecundario}`}>
+              <span className="text-sm">
+                {consignacoesFiltradas.length} consignação(ões) encontrada(s)
+              </span>
             </div>
           </div>
         </div>
 
         {/* Lista de Consignações */}
-        <div className="space-y-4">
-          {consignacoesFiltradas.map((consignacao: Consignacao) => (
-            <div key={consignacao.id} className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda} hover:shadow-md transition-shadow`}>
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex-1">
-                  {/* Header */}
-                  <div className="flex items-center mb-3">
-                    <div className={`p-2 rounded-lg mr-3 ${
-                      consignacao.status === 'ativa' 
-                        ? 'bg-green-100' 
-                        : consignacao.status === 'finalizada'
-                        ? 'bg-blue-100'
-                        : 'bg-red-100'
-                    }`}>
-                      {consignacao.status === 'ativa' ? (
-                        <Clock className={`h-5 w-5 ${
-                          consignacao.status === 'ativa' 
-                            ? 'text-green-600' 
-                            : consignacao.status === 'finalizada'
-                            ? 'text-blue-600'
-                            : 'text-red-600'
-                        }`} />
-                      ) : consignacao.status === 'finalizada' ? (
-                        <CheckCircle className="h-5 w-5 text-blue-600" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-red-600" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className={`text-lg font-semibold ${tema.texto}`}>
-                        {consignacao.clienteNome}
-                      </h3>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        consignacao.status === 'ativa' 
-                          ? 'bg-green-100 text-green-800' 
-                          : consignacao.status === 'finalizada'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {consignacao.status.charAt(0).toUpperCase() + consignacao.status.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Informações do Cliente */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                    <div className="flex items-center text-sm">
-                      <User className={`h-4 w-4 mr-2 ${tema.textoSecundario}`} />
+        <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} overflow-hidden`}>
+          {consignacoesFiltradas.length === 0 ? (
+            <div className="p-8 text-center">
+              <ShoppingCart className={`mx-auto h-12 w-12 ${tema.textoSecundario} mb-4`} />
+              <h3 className={`text-lg font-medium ${tema.texto} mb-2`}>
+                Nenhuma consignação encontrada
+              </h3>
+              <p className={`${tema.textoSecundario}`}>
+                {buscaTexto || filtroStatus !== 'todas' 
+                  ? 'Tente ajustar os filtros de busca.'
+                  : 'Comece criando sua primeira consignação.'
+                }
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop: Tabela */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className={`${tema.fundo}`}>
+                    <tr>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Consignação
+                      </th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Cliente
+                      </th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Vendedor
+                      </th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Valor
+                      </th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Status
+                      </th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
+                    {consignacoesFiltradas.map((consignacao) => (
+                      <tr key={consignacao.id} className={`hover:${tema.hover}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium ${tema.texto}`}>
+                              #{consignacao.id}
+                            </div>
+                            <div className={`text-sm ${tema.textoSecundario}`}>
+                              {new Date(consignacao.dataConsignacao).toLocaleDateString('pt-BR')}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium ${tema.texto}`}>
+                              {consignacao.clienteNome}
+                            </div>
+                            <div className={`text-sm ${tema.textoSecundario}`}>
+                              {consignacao.clienteDocumento}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm ${tema.texto}`}>
+                            {consignacao.vendedor.nome}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium ${tema.texto}`}>
+                              {formatarMoedaBR(consignacao.valorTotal)}
+                            </div>
+                            <div className={`text-sm ${tema.textoSecundario}`}>
+                              {consignacao.quantidadeTotal} itens
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            consignacao.status === 'ativa' 
+                              ? 'bg-blue-100 text-blue-800'
+                              : consignacao.status === 'finalizada'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {consignacao.status === 'ativa' ? 'Ativa' :
+                             consignacao.status === 'finalizada' ? 'Finalizada' : 'Cancelada'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => setConsignacaoDetalhes(consignacao)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Ver detalhes"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {consignacao.status === 'ativa' && (
+                              <>
+                                <button
+                                  onClick={() => abrirModalRetorno(consignacao)}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Processar retorno"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => abrirModal(consignacao)}
+                                  className="text-yellow-600 hover:text-yellow-900"
+                                  title="Editar"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => setConsignacaoParaExcluir(consignacao)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile: Cards */}
+              <div className="md:hidden">
+                {consignacoesFiltradas.map((consignacao) => (
+                  <div key={consignacao.id} className={`p-4 border-b ${tema.borda}`}>
+                    <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className={`font-medium ${tema.textoSecundario}`}>Documento</p>
-                        <p className={tema.texto}>{consignacao.clienteDocumento}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <Phone className={`h-4 w-4 mr-2 ${tema.textoSecundario}`} />
-                      <div>
-                        <p className={`font-medium ${tema.textoSecundario}`}>Telefone</p>
-                        <p className={tema.texto}>{consignacao.clienteTelefone}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <User className={`h-4 w-4 mr-2 ${tema.textoSecundario}`} />
-                      <div>
-                        <p className={`font-medium ${tema.textoSecundario}`}>Vendedor</p>
-                        <p className={tema.texto}>{consignacao.vendedor.nome}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <Calendar className={`h-4 w-4 mr-2 ${tema.textoSecundario}`} />
-                      <div>
-                        <p className={`font-medium ${tema.textoSecundario}`}>Data</p>
-                        <p className={tema.texto}>
+                        <h3 className={`font-medium ${tema.texto}`}>#{consignacao.id}</h3>
+                        <p className={`text-sm ${tema.textoSecundario}`}>
                           {new Date(consignacao.dataConsignacao).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Valores */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div className="flex items-center">
-                      <Package className={`h-5 w-5 mr-2 ${tema.textoSecundario}`} />
-                      <div>
-                        <p className={`text-sm font-medium ${tema.textoSecundario}`}>Quantidade</p>
-                        <p className={`font-semibold ${tema.texto}`}>{consignacao.quantidadeTotal} itens</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <Calculator className={`h-5 w-5 mr-2 ${tema.textoSecundario}`} />
-                      <div>
-                        <p className={`text-sm font-medium ${tema.textoSecundario}`}>Valor Total</p>
-                        <p className={`font-semibold ${tema.texto}`}>{formatarMoedaBR(consignacao.valorTotal)}</p>
-                      </div>
-                    </div>
-                    {consignacao.retorno && (
-                      <div className="flex items-center">
-                        <Calculator className={`h-5 w-5 mr-2 ${tema.textoSecundario}`} />
-                        <div>
-                          <p className={`text-sm font-medium ${tema.textoSecundario}`}>Valor Devido</p>
-                          <p className={`font-semibold ${consignacao.retorno.valorDevido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatarMoedaBR(consignacao.retorno.valorDevido)}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Retorno (se finalizada) */}
-                  {consignacao.retorno && (
-                    <div className="p-4 bg-gray-50 rounded-lg mb-4">
-                      <h4 className="font-medium text-gray-700 mb-2">Informações do Retorno</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-600">Devolvidos:</span>
-                          <p>{consignacao.retorno.quantidadeRetornada} itens</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-600">Vendidos:</span>
-                          <p>{consignacao.retorno.quantidadeVendida} itens</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-600">Valor Devolvido:</span>
-                          <p>{formatarMoedaBR(consignacao.retorno.valorRetornado)}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-600">Valor Devido:</span>
-                          <p className={`font-medium ${consignacao.retorno.valorDevido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatarMoedaBR(consignacao.retorno.valorDevido)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Observações */}
-                  {consignacao.observacoes && (
-                    <div className="flex items-start">
-                      <FileText className={`h-4 w-4 mr-2 mt-1 ${tema.textoSecundario}`} />
-                      <div>
-                        <span className={`font-medium ${tema.textoSecundario}`}>Observações:</span>
-                        <p className={`text-sm ${tema.texto}`}>{consignacao.observacoes}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Ações */}
-                <div className="flex flex-col space-y-2 mt-4 lg:mt-0 lg:ml-6">
-                  {consignacao.status === 'ativa' && (
-                    <button
-                      onClick={() => abrirModalRetorno(consignacao)}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-green-700 transition-colors"
-                    >
-                      <QrCode className="mr-2 h-4 w-4" />
-                      Conferir Retorno
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={() => abrirModalDetalhes(consignacao)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition-colors"
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Ver Detalhes
-                  </button>
-
-                  {tipoUsuario === 'admin' && (
-                    <button
-                      onClick={() => abrirModalExclusao(consignacao)}
-                      className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-red-700 transition-colors"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Excluir
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Estado Vazio */}
-        {consignacoesFiltradas.length === 0 && (
-          <div className={`${tema.papel} border ${tema.borda} rounded-lg p-12 text-center`}>
-            <ShoppingCart className={`mx-auto h-12 w-12 ${tema.textoSecundario} mb-4`} />
-            <h3 className={`text-lg font-medium ${tema.texto} mb-2`}>
-              Nenhuma consignação encontrada
-            </h3>
-            <p className={`text-sm ${tema.textoSecundario} mb-4`}>
-              {buscaTexto || filtroStatus !== 'todas'
-                ? 'Tente ajustar os filtros para encontrar consignações.'
-                : 'Comece criando sua primeira consignação.'
-              }
-            </p>
-            {(!buscaTexto && filtroStatus === 'todas') && (
-              <button
-                onClick={() => abrirModal()}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Criar Primeira Consignação
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Modal de Nova Consignação */}
-        {modalAberto && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div 
-                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
-                onClick={() => !salvando && fecharModal()}
-              />
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-6`}>
-                    {consignacaoEditando ? 'Editar Consignação' : 'Nova Consignação'}
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {/* Nome do Cliente */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Nome do Cliente <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formConsignacao.clienteNome}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, clienteNome: e.target.value }))}
-                        disabled={salvando}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.clienteNome ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        placeholder="Digite o nome do cliente"
-                      />
-                      {formErrors.clienteNome && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.clienteNome}</p>
-                      )}
-                    </div>
-
-                    {/* Tipo de Documento */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                        Tipo de Documento <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex space-x-4">
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            value="cpf"
-                            checked={formConsignacao.tipoDocumento === 'cpf'}
-                            onChange={() => {
-                              setFormConsignacao(prev => ({ 
-                                ...prev, 
-                                tipoDocumento: 'cpf',
-                                clienteDocumento: ''
-                              }));
-                            }}
-                            disabled={salvando}
-                            className="mr-2"
-                          />
-                          <span className={tema.texto}>CPF</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            value="cnpj"
-                            checked={formConsignacao.tipoDocumento === 'cnpj'}
-                            onChange={() => {
-                              setFormConsignacao(prev => ({ 
-                                ...prev, 
-                                tipoDocumento: 'cnpj',
-                                clienteDocumento: ''
-                              }));
-                            }}
-                            disabled={salvando}
-                            className="mr-2"
-                          />
-                          <span className={tema.texto}>CNPJ</span>
-                        </label>
-                      </div>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        consignacao.status === 'ativa' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : consignacao.status === 'finalizada'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {consignacao.status === 'ativa' ? 'Ativa' :
+                         consignacao.status === 'finalizada' ? 'Finalizada' : 'Cancelada'}
+                      </span>
                     </div>
                     
-                    {/* Documento e Telefone */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`text-sm ${tema.textoSecundario} mb-3 space-y-1`}>
+                      <p><strong>Cliente:</strong> {consignacao.clienteNome}</p>
+                      <p><strong>Vendedor:</strong> {consignacao.vendedor.nome}</p>
+                      <p><strong>Valor:</strong> {formatarMoedaBR(consignacao.valorTotal)} ({consignacao.quantidadeTotal} itens)</p>
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setConsignacaoDetalhes(consignacao)}
+                        className="text-blue-600 hover:text-blue-900 flex items-center"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver
+                      </button>
+                      {consignacao.status === 'ativa' && (
+                        <button
+                          onClick={() => abrirModalRetorno(consignacao)}
+                          className="text-green-600 hover:text-green-900 flex items-center"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Retorno
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Modal de Cadastro/Edição */}
+        {modalAberto && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${tema.papel} rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-semibold ${tema.texto}`}>
+                    {consignacaoEditando ? 'Editar Consignação' : 'Nova Consignação'}
+                  </h2>
+                  <button
+                    onClick={fecharModal}
+                    disabled={salvando}
+                    className={`p-2 rounded-md ${tema.hover} ${tema.textoSecundario}`}
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Dados do Cliente */}
+                  <div>
+                    <h3 className={`text-lg font-medium ${tema.texto} mb-3`}>Dados do Cliente</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                          {formConsignacao.tipoDocumento.toUpperCase()} <span className="text-red-500">*</span>
+                          Nome <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
-                          value={formConsignacao.clienteDocumento}
-                          onChange={(e) => setFormConsignacao(prev => ({ 
-                            ...prev, 
-                            clienteDocumento: formatarDocumento(e.target.value, formConsignacao.tipoDocumento) 
-                          }))}
+                          value={formConsignacao.clienteNome}
+                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, clienteNome: e.target.value }))}
                           disabled={salvando}
-                          maxLength={formConsignacao.tipoDocumento === 'cpf' ? 14 : 18}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.clienteDocumento ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          placeholder={formConsignacao.tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.clienteNome ? 'border-red-500' : ''}`}
+                          placeholder="Nome do cliente"
                         />
-                        {formErrors.clienteDocumento && (
-                          <p className="mt-1 text-sm text-red-600">{formErrors.clienteDocumento}</p>
+                        {formErrors.clienteNome && (
+                          <p className="mt-1 text-sm text-red-600">{formErrors.clienteNome}</p>
                         )}
                       </div>
 
@@ -773,118 +686,246 @@ export const TelaConsignacoes: React.FC = () => {
                           Telefone <span className="text-red-500">*</span>
                         </label>
                         <input
-                          type="tel"
+                          type="text"
                           value={formConsignacao.clienteTelefone}
-                          onChange={(e) => setFormConsignacao(prev => ({ 
-                            ...prev, 
-                            clienteTelefone: formatarTelefone(e.target.value) 
-                          }))}
+                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, clienteTelefone: formatarTelefone(e.target.value) }))}
                           disabled={salvando}
-                          maxLength={15}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.clienteTelefone ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.clienteTelefone ? 'border-red-500' : ''}`}
                           placeholder="(11) 99999-9999"
                         />
                         {formErrors.clienteTelefone && (
                           <p className="mt-1 text-sm text-red-600">{formErrors.clienteTelefone}</p>
                         )}
                       </div>
-                    </div>
-                    
-                    {/* Vendedor (apenas para admin) */}
-                    {tipoUsuario === 'admin' && (
+
                       <div>
                         <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                          Vendedor <span className="text-red-500">*</span>
+                          Tipo de Documento
                         </label>
                         <select
-                          value={formConsignacao.vendedorId}
-                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, vendedorId: e.target.value }))}
+                          value={formConsignacao.tipoDocumento}
+                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, tipoDocumento: e.target.value as 'cpf' | 'cnpj', clienteDocumento: '' }))}
                           disabled={salvando}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.vendedorId ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
                         >
-                          <option value="">Selecione um vendedor</option>
-                          {vendedores.filter((v: Vendedor) => v.status === 'Ativo').map((vendedor: Vendedor) => (
-                            <option key={vendedor.id} value={vendedor.id}>{vendedor.nome}</option>
-                          ))}
+                          <option value="cpf">CPF</option>
+                          <option value="cnpj">CNPJ</option>
                         </select>
-                        {formErrors.vendedorId && (
-                          <p className="mt-1 text-sm text-red-600">{formErrors.vendedorId}</p>
-                        )}
                       </div>
-                    )}
-                    
-                    {/* Quantidade e Valor */}
-                    <div className="grid grid-cols-2 gap-4">
+
                       <div>
                         <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                          Quantidade Total <span className="text-red-500">*</span>
+                          {formConsignacao.tipoDocumento === 'cpf' ? 'CPF' : 'CNPJ'} <span className="text-red-500">*</span>
                         </label>
                         <input
-                          type="number"
-                          min="1"
-                          value={formConsignacao.quantidadeTotal}
-                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, quantidadeTotal: e.target.value }))}
+                          type="text"
+                          value={formConsignacao.clienteDocumento}
+                          onChange={(e) => setFormConsignacao(prev => ({ 
+                            ...prev, 
+                            clienteDocumento: prev.tipoDocumento === 'cpf' 
+                              ? formatarCPF(e.target.value) 
+                              : formatarCNPJ(e.target.value)
+                          }))}
                           disabled={salvando}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.quantidadeTotal ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          placeholder="0"
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.clienteDocumento ? 'border-red-500' : ''}`}
+                          placeholder={formConsignacao.tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
                         />
-                        {formErrors.quantidadeTotal && (
-                          <p className="mt-1 text-sm text-red-600">{formErrors.quantidadeTotal}</p>
+                        {formErrors.clienteDocumento && (
+                          <p className="mt-1 text-sm text-red-600">{formErrors.clienteDocumento}</p>
                         )}
                       </div>
-                      
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                          Valor Total <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formConsignacao.valorTotal}
-                          onChange={(e) => setFormConsignacao(prev => ({ ...prev, valorTotal: e.target.value }))}
-                          disabled={salvando}
-                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${formErrors.valorTotal ? 'border-red-500' : ''} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          placeholder="0.00"
-                        />
-                        {formErrors.valorTotal && (
-                          <p className="mt-1 text-sm text-red-600">{formErrors.valorTotal}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Observações */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Observações
-                      </label>
-                      <textarea
-                        value={formConsignacao.observacoes}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, observacoes: e.target.value }))}
-                        disabled={salvando}
-                        rows={3}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        placeholder="Observações adicionais..."
-                      />
                     </div>
                   </div>
-                </div>
-                
-                <div className={`${tema.papel} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
-                  <button
-                    onClick={salvarConsignacao}
-                    disabled={salvando}
-                    className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {salvando ? 'Salvando...' : 'Salvar'}
-                  </button>
-                  <button
-                    onClick={fecharModal}
-                    disabled={salvando}
-                    className={`mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    Cancelar
-                  </button>
+
+                  {/* Vendedor */}
+                  {tipoUsuario === 'admin' && (
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                        Vendedor <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={formConsignacao.vendedorId}
+                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, vendedorId: e.target.value }))}
+                        disabled={salvando}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.vendedorId ? 'border-red-500' : ''}`}
+                      >
+                        <option value="">Selecione um vendedor</option>
+                        {vendedores.filter(v => v.status === 'Ativo').map(vendedor => (
+                          <option key={vendedor.id} value={vendedor.id}>
+                            {vendedor.nome}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.vendedorId && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.vendedorId}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Produtos */}
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className={`text-lg font-medium ${tema.texto}`}>Produtos</h3>
+                      <button
+                        type="button"
+                        onClick={adicionarProduto}
+                        disabled={salvando}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Adicionar
+                      </button>
+                    </div>
+
+                    {produtosConsignacao.length === 0 ? (
+                      <div className={`p-4 border-2 border-dashed ${tema.borda} rounded-lg text-center`}>
+                        <Package className={`mx-auto h-8 w-8 ${tema.textoSecundario} mb-2`} />
+                        <p className={`${tema.textoSecundario}`}>
+                          Nenhum produto adicionado. Clique em "Adicionar" para incluir produtos.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {produtosConsignacao.map((produto, index) => (
+                          <div key={index} className={`p-3 border ${tema.borda} rounded-lg`}>
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                              <div className="md:col-span-2">
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Produto
+                                </label>
+                                <select
+                                  value={produto.produtoId}
+                                  onChange={(e) => atualizarProduto(index, 'produtoId', parseInt(e.target.value))}
+                                  disabled={salvando}
+                                  className={`w-full px-2 py-1 text-sm border rounded ${tema.input}`}
+                                >
+                                  <option value={0}>Selecione um produto</option>
+                                  {produtos.filter(p => p.ativo).map(p => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.nome} - {formatarMoedaBR(p.valorVenda)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Qtd
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={produto.quantidade}
+                                  onChange={(e) => atualizarProduto(index, 'quantidade', parseInt(e.target.value) || 1)}
+                                  disabled={salvando}
+                                  className={`w-full px-2 py-1 text-sm border rounded ${tema.input}`}
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Valor Unit.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={formatarMoedaBR(produto.valorUnitario)}
+                                  disabled
+                                  className={`w-full px-2 py-1 text-sm border rounded bg-gray-100 ${tema.input}`}
+                                />
+                              </div>
+                              
+                              <div className="flex items-end space-x-2">
+                                <div className="flex-1">
+                                  <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                    Total
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={formatarMoedaBR(produto.valorTotal)}
+                                    disabled
+                                    className={`w-full px-2 py-1 text-sm border rounded bg-gray-100 ${tema.input}`}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removerProduto(index)}
+                                  disabled={salvando}
+                                  className="text-red-600 hover:text-red-900 p-1"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {formErrors.produtos && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.produtos}</p>
+                    )}
+                  </div>
+
+                  {/* Totais */}
+                  {produtosConsignacao.length > 0 && (
+                    <div className={`p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className={`text-sm ${tema.textoSecundario}`}>
+                            Total de itens: <strong>{totaisConsignacao.quantidadeTotal}</strong>
+                          </span>
+                        </div>
+                        <div>
+                          <span className={`text-lg font-semibold ${tema.texto}`}>
+                            Total: {formatarMoedaBR(totaisConsignacao.valorTotal)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observações */}
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                      Observações
+                    </label>
+                    <textarea
+                      value={formConsignacao.observacoes}
+                      onChange={(e) => setFormConsignacao(prev => ({ ...prev, observacoes: e.target.value }))}
+                      disabled={salvando}
+                      rows={3}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+                      placeholder="Observações sobre a consignação"
+                    />
+                  </div>
+
+                  {/* Botões */}
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      onClick={fecharModal}
+                      disabled={salvando}
+                      className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={salvarConsignacao}
+                      disabled={salvando}
+                      className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {salvando ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Salvar
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -893,93 +934,179 @@ export const TelaConsignacoes: React.FC = () => {
 
         {/* Modal de Retorno */}
         {modalRetornoAberto && consignacaoRetorno && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalRetorno} />
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-6`}>
-                    Conferir Retorno - {consignacaoRetorno.clienteNome}
-                  </h3>
-                  
-                  {/* Leitor de Código de Barras */}
-                  <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                    <h4 className="font-medium text-blue-700 mb-3">Leitura de Código de Barras</h4>
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={codigoLeitura}
-                        onChange={(e) => setCodigoLeitura(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && lerCodigoBarras()}
-                        className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Digite ou escaneie o código de barras"
-                      />
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${tema.papel} rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-semibold ${tema.texto}`}>
+                    Processar Retorno - Consignação #{consignacaoRetorno.id}
+                  </h2>
+                  <button
+                    onClick={() => setModalRetornoAberto(false)}
+                    disabled={salvando}
+                    className={`p-2 rounded-md ${tema.hover} ${tema.textoSecundario}`}
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Leitor QR Code Simulado */}
+                  <div className={`p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className={`font-medium ${tema.texto}`}>Leitura de QR Code</h3>
                       <button
-                        onClick={lerCodigoBarras}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center"
+                        onClick={lerQRCode}
+                        disabled={leituraQR || salvando}
+                        className={`px-3 py-1 bg-purple-600 text-white rounded text-sm flex items-center ${leituraQR ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-700'}`}
                       >
-                        <QrCode className="h-4 w-4 mr-2" />
-                        Ler
+                        <QrCode className="h-4 w-4 mr-1" />
+                        {leituraQR ? 'Lendo...' : 'Ler QR'}
                       </button>
                     </div>
+                    {leituraQR && (
+                      <div className="text-center py-4">
+                        <div className="animate-pulse">📱 Simulando leitura de QR Code...</div>
+                      </div>
+                    )}
+                    {codigoQR && (
+                      <div className={`text-sm ${tema.textoSecundario}`}>
+                        Último código lido: {codigoQR}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Produtos Lidos */}
-                  {produtosLidos.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="font-medium text-gray-700 mb-3">Produtos Retornados</h4>
-                      <div className="space-y-2">
-                        {produtosLidos.map((pl, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                            <div className="flex-1">
-                              <p className="font-medium">{pl.produto.nome}</p>
-                              <p className="text-sm text-gray-600">
-                                {pl.quantidade}x {formatarMoedaBR(pl.produto.valorVenda)} = {formatarMoedaBR(pl.produto.valorVenda * pl.quantidade)}
-                              </p>
+                  {/* Lista de produtos para retorno */}
+                  <div>
+                    <h3 className={`font-medium ${tema.texto} mb-3`}>Produtos da Consignação</h3>
+                    <div className="space-y-3">
+                      {formRetorno.produtos.map((produto, index) => {
+                        const produtoInfo = produtos.find(p => p.id === produto.produtoId);
+                        return (
+                          <div key={index} className={`p-3 border ${tema.borda} rounded-lg`}>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Produto
+                                </label>
+                                <div className={`text-sm ${tema.texto}`}>
+                                  {produtoInfo?.nome || 'Produto não encontrado'}
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Qtd Consignada
+                                </label>
+                                <div className={`text-sm ${tema.textoSecundario}`}>
+                                  {consignacaoRetorno.produtos?.[index]?.quantidade || 0}
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Qtd Retornada
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={consignacaoRetorno.produtos?.[index]?.quantidade || 0}
+                                  value={produto.quantidadeRetornada}
+                                  onChange={(e) => {
+                                    const qtdRetornada = parseInt(e.target.value) || 0;
+                                    const qtdConsignada = consignacaoRetorno.produtos?.[index]?.quantidade || 0;
+                                    const qtdVendida = qtdConsignada - qtdRetornada;
+                                    
+                                    setFormRetorno(prev => ({
+                                      ...prev,
+                                      produtos: prev.produtos.map((p, i) => 
+                                        i === index 
+                                          ? { ...p, quantidadeRetornada: qtdRetornada, quantidadeVendida: qtdVendida }
+                                          : p
+                                      )
+                                    }));
+                                  }}
+                                  disabled={salvando}
+                                  className={`w-full px-2 py-1 text-sm border rounded ${tema.input}`}
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className={`block text-xs font-medium ${tema.texto} mb-1`}>
+                                  Qtd Vendida
+                                </label>
+                                <div className={`text-sm ${produto.quantidadeVendida > 0 ? 'text-green-600' : tema.textoSecundario}`}>
+                                  {produto.quantidadeVendida}
+                                </div>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => removerProdutoLido(pl.produto.id)}
-                              className="text-red-600 hover:text-red-800 p-1"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Observações do retorno */}
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                      Observações do Retorno
+                    </label>
+                    <textarea
+                      value={formRetorno.observacoes}
+                      onChange={(e) => setFormRetorno(prev => ({ ...prev, observacoes: e.target.value }))}
+                      disabled={salvando}
+                      rows={3}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+                      placeholder="Observações sobre o retorno"
+                    />
+                  </div>
 
                   {/* Resumo */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium text-gray-700 mb-2">Consignação Original</h4>
-                      <p>Quantidade: {consignacaoRetorno.quantidadeTotal} itens</p>
-                      <p>Valor: {formatarMoedaBR(consignacaoRetorno.valorTotal)}</p>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg">
-                      <h4 className="font-medium text-green-700 mb-2">Retorno Atual</h4>
-                      <p>Devolvidos: {totaisRetorno.quantidadeRetornada} itens</p>
-                      <p>Vendidos: {consignacaoRetorno.quantidadeTotal - totaisRetorno.quantidadeRetornada} itens</p>
-                      <p>Valor Devido: <span className="font-semibold">{formatarMoedaBR(consignacaoRetorno.valorTotal - totaisRetorno.valorRetornado)}</span></p>
+                  <div className={`p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+                    <h4 className={`font-medium ${tema.texto} mb-2`}>Resumo do Retorno</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className={`${tema.textoSecundario}`}>Itens retornados:</span>
+                        <span className={`ml-2 font-medium ${tema.texto}`}>
+                          {formRetorno.produtos.reduce((total, p) => total + p.quantidadeRetornada, 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className={`${tema.textoSecundario}`}>Itens vendidos:</span>
+                        <span className={`ml-2 font-medium text-green-600`}>
+                          {formRetorno.produtos.reduce((total, p) => total + p.quantidadeVendida, 0)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className={`${tema.papel} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
-                  <button
-                    onClick={finalizarConsignacao}
-                    disabled={produtosLidos.length === 0}
-                    className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors ${produtosLidos.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    Finalizar Consignação
-                  </button>
-                  <button
-                    onClick={fecharModalRetorno}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Cancelar
-                  </button>
+
+                  {/* Botões */}
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      onClick={() => setModalRetornoAberto(false)}
+                      disabled={salvando}
+                      className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={processarRetorno}
+                      disabled={salvando}
+                      className={`px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {salvando ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Finalizar Retorno
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -987,120 +1114,129 @@ export const TelaConsignacoes: React.FC = () => {
         )}
 
         {/* Modal de Detalhes */}
-        {modalDetalhesAberto && consignacaoDetalhes && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalDetalhes} />
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-6`}>
-                    Detalhes da Consignação
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Cliente</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.clienteNome}</p>
-                      </div>
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Status</label>
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          consignacaoDetalhes.status === 'ativa' 
-                            ? 'bg-green-100 text-green-800' 
-                            : consignacaoDetalhes.status === 'finalizada'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {consignacaoDetalhes.status.charAt(0).toUpperCase() + consignacaoDetalhes.status.slice(1)}
-                        </span>
+        {consignacaoDetalhes && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${tema.papel} rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto`}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className={`text-xl font-semibold ${tema.texto}`}>
+                    Detalhes da Consignação #{consignacaoDetalhes.id}
+                  </h2>
+                  <button
+                    onClick={() => setConsignacaoDetalhes(null)}
+                    className={`p-2 rounded-md ${tema.hover} ${tema.textoSecundario}`}
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Informações gerais */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className={`font-medium ${tema.texto} mb-2`}>Dados do Cliente</h3>
+                      <div className={`space-y-1 text-sm ${tema.textoSecundario}`}>
+                        <p><strong>Nome:</strong> {consignacaoDetalhes.clienteNome}</p>
+                        <p><strong>Documento:</strong> {consignacaoDetalhes.clienteDocumento}</p>
+                        <p><strong>Telefone:</strong> {consignacaoDetalhes.clienteTelefone}</p>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Documento</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.clienteDocumento}</p>
-                      </div>
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Telefone</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.clienteTelefone}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Vendedor</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.vendedor.nome}</p>
-                      </div>
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Data</label>
-                        <p className={tema.texto}>
-                          {new Date(consignacaoDetalhes.dataConsignacao).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Quantidade</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.quantidadeTotal} itens</p>
-                      </div>
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Valor Total</label>
-                        <p className={tema.texto}>{formatarMoedaBR(consignacaoDetalhes.valorTotal)}</p>
-                      </div>
-                    </div>
-
-                    {consignacaoDetalhes.retorno && (
-                      <div className="p-4 bg-gray-50 rounded-lg">
-                        <h4 className="font-medium text-gray-700 mb-3">Informações do Retorno</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-sm font-medium text-gray-600`}>Quantidade Devolvida</label>
-                            <p>{consignacaoDetalhes.retorno.quantidadeRetornada} itens</p>
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium text-gray-600`}>Quantidade Vendida</label>
-                            <p>{consignacaoDetalhes.retorno.quantidadeVendida} itens</p>
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium text-gray-600`}>Valor Devolvido</label>
-                            <p>{formatarMoedaBR(consignacaoDetalhes.retorno.valorRetornado)}</p>
-                          </div>
-                          <div>
-                            <label className={`block text-sm font-medium text-gray-600`}>Valor Devido</label>
-                            <p className={`font-medium ${consignacaoDetalhes.retorno.valorDevido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatarMoedaBR(consignacaoDetalhes.retorno.valorDevido)}
-                            </p>
-                          </div>
-                        </div>
+                    
+                    <div>
+                      <h3 className={`font-medium ${tema.texto} mb-2`}>Informações da Consignação</h3>
+                      <div className={`space-y-1 text-sm ${tema.textoSecundario}`}>
+                        <p><strong>Vendedor:</strong> {consignacaoDetalhes.vendedor.nome}</p>
+                        <p><strong>Data:</strong> {new Date(consignacaoDetalhes.dataConsignacao).toLocaleDateString('pt-BR')}</p>
+                        <p><strong>Status:</strong> {consignacaoDetalhes.status}</p>
                         {consignacaoDetalhes.dataRetorno && (
-                          <div className="mt-3">
-                            <label className={`block text-sm font-medium text-gray-600`}>Data do Retorno</label>
-                            <p>{new Date(consignacaoDetalhes.dataRetorno).toLocaleDateString('pt-BR')}</p>
-                          </div>
+                          <p><strong>Data Retorno:</strong> {new Date(consignacaoDetalhes.dataRetorno).toLocaleDateString('pt-BR')}</p>
                         )}
                       </div>
-                    )}
-
-                    {consignacaoDetalhes.observacoes && (
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.textoSecundario}`}>Observações</label>
-                        <p className={tema.texto}>{consignacaoDetalhes.observacoes}</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-                
-                <div className={`${tema.papel} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
-                  <button
-                    onClick={fecharModalDetalhes}
-                    className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Fechar
-                  </button>
+
+                  {/* Produtos */}
+                  <div>
+                    <h3 className={`font-medium ${tema.texto} mb-3`}>Produtos</h3>
+                    <div className="space-y-2">
+                      {consignacaoDetalhes.produtos?.map((produto: any, index: number) => (
+                        <div key={index} className={`p-3 border ${tema.borda} rounded-lg`}>
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className={`font-medium ${tema.texto}`}>
+                                {produto.produto?.nome || `Produto ID: ${produto.produtoId}`}
+                              </div>
+                              <div className={`text-sm ${tema.textoSecundario}`}>
+                                Quantidade: {produto.quantidade} | Valor unitário: {formatarMoedaBR(produto.valorUnitario)}
+                              </div>
+                            </div>
+                            <div className={`font-medium ${tema.texto}`}>
+                              {formatarMoedaBR(produto.valorTotal)}
+                            </div>
+                          </div>
+                        </div>
+                      )) || (
+                        <p className={`text-sm ${tema.textoSecundario}`}>Nenhum produto informado</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Totais */}
+                  <div className={`p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+                    <div className="flex justify-between items-center">
+                      <span className={`font-medium ${tema.texto}`}>
+                        Total de itens: {consignacaoDetalhes.quantidadeTotal}
+                      </span>
+                      <span className={`text-lg font-semibold ${tema.texto}`}>
+                        Total: {formatarMoedaBR(consignacaoDetalhes.valorTotal)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Retorno (se houver) */}
+                  {consignacaoDetalhes.retorno && (
+                    <div>
+                      <h3 className={`font-medium ${tema.texto} mb-3`}>Informações do Retorno</h3>
+                      <div className={`p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className={`${tema.textoSecundario}`}>Itens retornados:</span>
+                            <span className={`ml-2 font-medium ${tema.texto}`}>
+                              {consignacaoDetalhes.retorno.quantidadeRetornada}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`${tema.textoSecundario}`}>Valor retornado:</span>
+                            <span className={`ml-2 font-medium ${tema.texto}`}>
+                              {formatarMoedaBR(consignacaoDetalhes.retorno.valorRetornado)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`${tema.textoSecundario}`}>Itens vendidos:</span>
+                            <span className={`ml-2 font-medium text-green-600`}>
+                              {consignacaoDetalhes.retorno.quantidadeVendida}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`${tema.textoSecundario}`}>Valor devido:</span>
+                            <span className={`ml-2 font-medium text-green-600`}>
+                              {formatarMoedaBR(consignacaoDetalhes.retorno.valorDevido)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observações */}
+                  {consignacaoDetalhes.observacoes && (
+                    <div>
+                      <h3 className={`font-medium ${tema.texto} mb-2`}>Observações</h3>
+                      <div className={`p-3 ${tema.fundo} rounded-lg border ${tema.borda} text-sm ${tema.textoSecundario}`}>
+                        {consignacaoDetalhes.observacoes}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1108,43 +1244,42 @@ export const TelaConsignacoes: React.FC = () => {
         )}
 
         {/* Modal de Confirmação de Exclusão */}
-        {modalExclusaoAberto && consignacaoParaExcluir && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalExclusao} />
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="sm:flex sm:items-start">
-                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                      <AlertTriangle className="h-6 w-6 text-red-600" />
-                    </div>
-                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
-                        Confirmar Exclusão
-                      </h3>
-                      <div className="mt-2">
-                        <p className={`text-sm ${tema.textoSecundario}`}>
-                          Tem certeza que deseja excluir a consignação de <strong>"{consignacaoParaExcluir.clienteNome}"</strong>? 
-                          Esta ação não pode ser desfeita.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+        {modalExclusaoAberto && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className={`${tema.papel} rounded-lg max-w-md w-full`}>
+              <div className="p-6">
+                <div className="flex items-center mb-4">
+                  <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+                  <h2 className={`text-xl font-semibold ${tema.texto}`}>
+                    Confirmar Exclusão
+                  </h2>
                 </div>
                 
-                <div className={`${tema.papel} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
+                <p className={`${tema.textoSecundario} mb-6`}>
+                  Tem certeza de que deseja excluir a consignação <strong>#{consignacaoParaExcluir?.id}</strong>? 
+                  Esta ação não pode ser desfeita.
+                </p>
+                
+                <div className="flex justify-end space-x-3">
                   <button
-                    onClick={confirmarExclusao}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
-                  >
-                    Excluir
-                  </button>
-                  <button
-                    onClick={fecharModalExclusao}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                    onClick={() => setModalExclusaoAberto(false)}
+                    disabled={salvando}
+                    className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setConsignacoes(prev => prev.filter(c => c.id !== consignacaoParaExcluir?.id));
+                      mostrarMensagem('success', 'Consignação excluída com sucesso!');
+                      setModalExclusaoAberto(false);
+                      setConsignacaoParaExcluir(null);
+                    }}
+                    disabled={salvando}
+                    className={`px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center ${salvando ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
                   </button>
                 </div>
               </div>
