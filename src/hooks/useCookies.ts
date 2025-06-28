@@ -2,30 +2,29 @@
 import { useCallback } from 'react';
 import { CookieManager } from '../types/Common';
 
-/**
- * Hook para gerenciar cookies
- */
 export const useCookies = (): CookieManager => {
-  const setCookie = useCallback((name: string, value: string, days: number = 30) => {
-    const expires = new Date();
-    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
-    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
-  }, []);
-
   const getCookie = useCallback((name: string): string | null => {
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-    }
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
     return null;
   }, []);
 
-  const deleteCookie = useCallback((name: string) => {
+  const setCookie = useCallback((name: string, value: string, days: number = 7): void => {
+    let expires = '';
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+      expires = `; expires=${date.toUTCString()}`;
+    }
+    document.cookie = `${name}=${value}${expires}; path=/`;
+  }, []);
+
+  // ADICIONAR ESTA FUNÇÃO:
+  const deleteCookie = useCallback((name: string): void => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   }, []);
 
-  return { setCookie, getCookie, deleteCookie };
+  // ATUALIZAR O RETURN:
+  return { getCookie, setCookie, deleteCookie };
 };
