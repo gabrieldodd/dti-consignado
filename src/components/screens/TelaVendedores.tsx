@@ -5,6 +5,17 @@ import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
 
+interface Vendedor {
+  id: number;
+  nome: string;
+  email: string;
+  telefone: string;
+  status: string;
+  login: string;
+  senha: string;
+  dataCadastro: string;
+}
+
 interface VendedorForm {
   nome: string;
   email: string;
@@ -31,8 +42,8 @@ export const TelaVendedores: React.FC = () => {
   // Estados Locais
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [vendedorEditando, setVendedorEditando] = useState<any>(null);
-  const [vendedorParaExcluir, setVendedorParaExcluir] = useState<any>(null);
+  const [vendedorEditando, setVendedorEditando] = useState<Vendedor | null>(null);
+  const [vendedorParaExcluir, setVendedorParaExcluir] = useState<Vendedor | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
@@ -87,7 +98,7 @@ export const TelaVendedores: React.FC = () => {
   }, [vendedores, filtroStatus, buscaTexto]);
 
   // Funções de Modal
-  const abrirModal = useCallback((vendedor = null) => {
+  const abrirModal = useCallback((vendedor: Vendedor | null = null) => {
     setVendedorEditando(vendedor);
     if (vendedor) {
       setFormVendedor({
@@ -241,7 +252,7 @@ export const TelaVendedores: React.FC = () => {
   }, [formVendedor, vendedorEditando, vendedores, validarFormulario, setVendedores, mostrarMensagem, fecharModal]);
 
   // Excluir vendedor
-  const confirmarExclusao = useCallback((vendedor: any) => {
+  const confirmarExclusao = useCallback((vendedor: Vendedor) => {
     setVendedorParaExcluir(vendedor);
     setModalExclusaoAberto(true);
   }, []);

@@ -2,44 +2,52 @@
 import { useCallback } from 'react';
 
 export const useFormatters = () => {
-  const formatarTelefone = useCallback((valor: string) => {
-    const nums = valor.replace(/\D/g, '');
-    if (nums.length <= 2) return nums;
-    if (nums.length <= 6) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`;
-    if (nums.length <= 10) return `(${nums.slice(0, 2)}) ${nums.slice(2, 6)}-${nums.slice(6)}`;
-    return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7, 11)}`;
+  // Formatar telefone no padrão brasileiro
+  const formatarTelefone = useCallback((valor: string): string => {
+    const numeros = valor.replace(/\D/g, '');
+    
+    if (numeros.length <= 10) {
+      return numeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    } else {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    }
   }, []);
 
-  const formatarCPF = useCallback((valor: string) => {
-    const nums = valor.replace(/\D/g, '');
-    if (nums.length <= 3) return nums;
-    if (nums.length <= 6) return `${nums.slice(0, 3)}.${nums.slice(3)}`;
-    if (nums.length <= 9) return `${nums.slice(0, 3)}.${nums.slice(3, 6)}.${nums.slice(6)}`;
-    return `${nums.slice(0, 3)}.${nums.slice(3, 6)}.${nums.slice(6, 9)}-${nums.slice(9, 11)}`;
+  // Formatar CPF
+  const formatarCPF = useCallback((valor: string): string => {
+    const numeros = valor.replace(/\D/g, '');
+    return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   }, []);
 
-  const formatarCNPJ = useCallback((valor: string) => {
-    const nums = valor.replace(/\D/g, '');
-    if (nums.length <= 2) return nums;
-    if (nums.length <= 5) return `${nums.slice(0, 2)}.${nums.slice(2)}`;
-    if (nums.length <= 8) return `${nums.slice(0, 2)}.${nums.slice(2, 5)}.${nums.slice(5)}`;
-    if (nums.length <= 12) return `${nums.slice(0, 2)}.${nums.slice(2, 5)}.${nums.slice(5, 8)}/${nums.slice(8)}`;
-    return `${nums.slice(0, 2)}.${nums.slice(2, 5)}.${nums.slice(5, 8)}/${nums.slice(8, 12)}-${nums.slice(12, 14)}`;
+  // Formatar CNPJ
+  const formatarCNPJ = useCallback((valor: string): string => {
+    const numeros = valor.replace(/\D/g, '');
+    return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
   }, []);
 
-  const formatarMoedaBR = useCallback((valor: number) => {
+  // Formatar moeda brasileira
+  const formatarMoedaBR = useCallback((valor: number): string => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(valor);
   }, []);
 
-  const formatarData = useCallback((data: string) => {
+  // Formatar data brasileira
+  const formatarData = useCallback((data: string): string => {
     return new Date(data).toLocaleDateString('pt-BR');
   }, []);
 
-  const formatarNumero = useCallback((valor: number) => {
+  // Formatar número
+  const formatarNumero = useCallback((valor: number): string => {
     return new Intl.NumberFormat('pt-BR').format(valor);
+  }, []);
+
+  // Formatar entrada de moeda (para inputs)
+  const formatarMoedaInput = useCallback((valor: string): string => {
+    const numero = valor.replace(/\D/g, '');
+    const valorDecimal = (parseInt(numero) || 0) / 100;
+    return valorDecimal.toFixed(2).replace('.', ',');
   }, []);
 
   return {
@@ -48,6 +56,7 @@ export const useFormatters = () => {
     formatarCNPJ,
     formatarMoedaBR,
     formatarData,
-    formatarNumero
+    formatarNumero,
+    formatarMoedaInput
   };
 };

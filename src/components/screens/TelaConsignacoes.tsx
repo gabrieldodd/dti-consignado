@@ -18,11 +18,60 @@ import {
   FileText,
   X,
   Save,
-  ArrowLeft
+  ArrowLeft,
+  Edit
 } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
+
+interface Vendedor {
+  id: number;
+  nome: string;
+  email: string;
+  telefone: string;
+  status: string;
+  login: string;
+  senha: string;
+  dataCadastro: string;
+}
+
+interface Produto {
+  id: number;
+  nome: string;
+  descricao: string;
+  codigoBarras: string;
+  categoria: string;
+  valorCusto: number;
+  valorVenda: number;
+  estoque: number;
+  estoqueMinimo: number;
+  ativo: boolean;
+  dataCadastro: string;
+}
+
+interface Consignacao {
+  id: number;
+  clienteNome: string;
+  clienteDocumento: string;
+  clienteTelefone: string;
+  tipoDocumento: 'cpf' | 'cnpj';
+  vendedorId: number;
+  vendedor: Vendedor;
+  quantidadeTotal: number;
+  valorTotal: number;
+  dataConsignacao: string;
+  dataRetorno?: string;
+  status: 'ativa' | 'finalizada' | 'cancelada';
+  observacoes?: string;
+  produtos?: ProdutoConsignacao[];
+  retorno?: {
+    quantidadeRetornada: number;
+    valorRetornado: number;
+    quantidadeVendida: number;
+    valorDevido: number;
+  };
+}
 
 interface ConsignacaoForm {
   clienteNome: string;
@@ -74,10 +123,10 @@ export const TelaConsignacoes: React.FC = () => {
   const [modalRetornoAberto, setModalRetornoAberto] = useState(false);
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [consignacaoEditando, setConsignacaoEditando] = useState<any>(null);
-  const [consignacaoRetorno, setConsignacaoRetorno] = useState<any>(null);
-  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<any>(null);
-  const [consignacaoParaExcluir, setConsignacaoParaExcluir] = useState<any>(null);
+  const [consignacaoEditando, setConsignacaoEditando] = useState<Consignacao | null>(null);
+  const [consignacaoRetorno, setConsignacaoRetorno] = useState<Consignacao | null>(null);
+  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<Consignacao | null>(null);
+  const [consignacaoParaExcluir, setConsignacaoParaExcluir] = useState<Consignacao | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   // Estados para QR Code
@@ -145,7 +194,7 @@ export const TelaConsignacoes: React.FC = () => {
   }, [consignacoes, tipoUsuario, usuarioLogado, filtroStatus, buscaTexto]);
 
   // Funções de Modal
-  const abrirModal = useCallback((consignacao = null) => {
+  const abrirModal = useCallback((consignacao: Consignacao | null = null) => {
     setConsignacaoEditando(consignacao);
     if (consignacao) {
       setFormConsignacao({
@@ -319,7 +368,7 @@ export const TelaConsignacoes: React.FC = () => {
   }, [formConsignacao, produtosConsignacao, totaisConsignacao, vendedores, consignacaoEditando, consignacoes, validarFormulario, setConsignacoes, mostrarMensagem, fecharModal]);
 
   // Abrir modal de retorno
-  const abrirModalRetorno = useCallback((consignacao: any) => {
+  const abrirModalRetorno = useCallback((consignacao: Consignacao) => {
     setConsignacaoRetorno(consignacao);
     setFormRetorno({
       produtos: consignacao.produtos?.map((p: any) => ({

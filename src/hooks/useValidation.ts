@@ -2,40 +2,93 @@
 import { useCallback } from 'react';
 
 export const useValidation = () => {
-  const validarEmail = useCallback((email: string) => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
+  // Validar email
+  const validarEmail = useCallback((email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   }, []);
 
-  const validarTelefone = useCallback((telefone: string) => {
-    const regex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
-    return regex.test(telefone);
+  // Validar telefone brasileiro
+  const validarTelefone = useCallback((telefone: string): boolean => {
+    const telefoneRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
+    return telefoneRegex.test(telefone);
   }, []);
 
-  const validarCPF = useCallback((cpf: string) => {
-    const regex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
-    return regex.test(cpf);
+  // Validar CPF
+  const validarCPF = useCallback((cpf: string): boolean => {
+    const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
+    if (!cpfRegex.test(cpf)) return false;
+
+    // Validação mais completa do CPF
+    const numeros = cpf.replace(/\D/g, '');
+    
+    // Verificar se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(numeros)) return false;
+
+    // Calcular primeiro dígito verificador
+    let soma = 0;
+    for (let i = 0; i < 9; i++) {
+      soma += parseInt(numeros.charAt(i)) * (10 - i);
+    }
+    let resto = 11 - (soma % 11);
+    const dv1 = resto > 9 ? 0 : resto;
+
+    // Calcular segundo dígito verificador
+    soma = 0;
+    for (let i = 0; i < 10; i++) {
+      soma += parseInt(numeros.charAt(i)) * (11 - i);
+    }
+    resto = 11 - (soma % 11);
+    const dv2 = resto > 9 ? 0 : resto;
+
+    return dv1 === parseInt(numeros.charAt(9)) && dv2 === parseInt(numeros.charAt(10));
   }, []);
 
-  const validarCNPJ = useCallback((cnpj: string) => {
-    const regex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
-    return regex.test(cnpj);
+  // Validar CNPJ
+  const validarCNPJ = useCallback((cnpj: string): boolean => {
+    const cnpjRegex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+    if (!cnpjRegex.test(cnpj)) return false;
+
+    const numeros = cnpj.replace(/\D/g, '');
+    
+    // Verificar se todos os dígitos são iguais
+    if (/^(\d)\1{13}$/.test(numeros)) return false;
+
+    // Validação dos dígitos verificadores
+    const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+    let soma = 0;
+    for (let i = 0; i < 12; i++) {
+      soma += parseInt(numeros.charAt(i)) * pesos1[i];
+    }
+    let resto = soma % 11;
+    const dv1 = resto < 2 ? 0 : 11 - resto;
+
+    soma = 0;
+    for (let i = 0; i < 13; i++) {
+      soma += parseInt(numeros.charAt(i)) * pesos2[i];
+    }
+    resto = soma % 11;
+    const dv2 = resto < 2 ? 0 : 11 - resto;
+
+    return dv1 === parseInt(numeros.charAt(12)) && dv2 === parseInt(numeros.charAt(13));
   }, []);
 
-  const validarCodigoBarras = useCallback((codigo: string) => {
-    return codigo.length >= 8 && /^\d+$/.test(codigo);
+  // Validar código de barras
+  const validarCodigoBarras = useCallback((codigo: string): boolean => {
+    const numeros = codigo.replace(/\D/g, '');
+    return numeros.length >= 8 && numeros.length <= 14;
   }, []);
 
-  const validarSenha = useCallback((senha: string) => {
-    return senha.length >= 6;
+  // Validar se valor é positivo
+  const validarValorPositivo = useCallback((valor: number): boolean => {
+    return !isNaN(valor) && valor > 0;
   }, []);
 
-  const validarNome = useCallback((nome: string) => {
-    return nome.trim().length >= 2;
-  }, []);
-
-  const validarLogin = useCallback((login: string) => {
-    return login.trim().length >= 3;
+  // Validar se valor não é negativo
+  const validarValorNaoNegativo = useCallback((valor: number): boolean => {
+    return !isNaN(valor) && valor >= 0;
   }, []);
 
   return {
@@ -44,8 +97,7 @@ export const useValidation = () => {
     validarCPF,
     validarCNPJ,
     validarCodigoBarras,
-    validarSenha,
-    validarNome,
-    validarLogin
+    validarValorPositivo,
+    validarValorNaoNegativo
   };
 };

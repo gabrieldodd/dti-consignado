@@ -3,6 +3,15 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Tags, Plus, Search, Edit, Trash2, AlertTriangle, X, Save, Package } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 
+interface Categoria {
+  id: number;
+  nome: string;
+  descricao: string;
+  cor: string;
+  ativa: boolean;
+  dataCadastro: string;
+}
+
 interface CategoriaForm {
   nome: string;
   descricao: string;
@@ -37,8 +46,8 @@ export const TelaCategorias: React.FC = () => {
   // Estados Locais
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [categoriaEditando, setCategoriaEditando] = useState<any>(null);
-  const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<any>(null);
+  const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
+  const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   // Filtros e Busca
@@ -97,7 +106,7 @@ export const TelaCategorias: React.FC = () => {
   }, [categorias, filtroStatus, buscaTexto]);
 
   // Funções de Modal
-  const abrirModal = useCallback((categoria = null) => {
+  const abrirModal = useCallback((categoria: Categoria | null = null) => {
     setCategoriaEditando(categoria);
     if (categoria) {
       setFormCategoria({
@@ -206,7 +215,7 @@ export const TelaCategorias: React.FC = () => {
   }, [formCategoria, categoriaEditando, categorias, validarFormulario, setCategorias, mostrarMensagem, fecharModal]);
 
   // Excluir categoria
-  const confirmarExclusao = useCallback((categoria: any) => {
+  const confirmarExclusao = useCallback((categoria: Categoria) => {
     const produtosNaCategoria = contagemProdutos[categoria.nome] || 0;
     if (produtosNaCategoria > 0) {
       mostrarMensagem('error', `Não é possível excluir esta categoria pois há ${produtosNaCategoria} produto(s) vinculado(s).`);

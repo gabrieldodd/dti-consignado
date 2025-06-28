@@ -1,9 +1,23 @@
 // src/components/screens/TelaProdutos.tsx
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Package, Plus, Search, Edit, Trash2, AlertTriangle, Barcode, DollarSign, X, Save } from 'lucide-react';
+import { Package, Plus, Search, Edit, Trash2, AlertTriangle, Hash, DollarSign, X, Save } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
+
+interface Produto {
+  id: number;
+  nome: string;
+  descricao: string;
+  codigoBarras: string;
+  categoria: string;
+  valorCusto: number;
+  valorVenda: number;
+  estoque: number;
+  estoqueMinimo: number;
+  ativo: boolean;
+  dataCadastro: string;
+}
 
 interface ProdutoForm {
   nome: string;
@@ -28,14 +42,21 @@ export const TelaProdutos: React.FC = () => {
     cookies 
   } = useAppContext();
   
-  const { formatarMoedaBR, formatarNumero, formatarMoedaInput } = useFormatters();
+  const { formatarMoedaBR, formatarNumero } = useFormatters();
   const { validarCodigoBarras } = useValidation();
+
+  // Função para formatar entrada de moeda
+  const formatarMoedaInput = useCallback((valor: string) => {
+    const numero = valor.replace(/\D/g, '');
+    const valorDecimal = (parseInt(numero) || 0) / 100;
+    return valorDecimal.toFixed(2).replace('.', ',');
+  }, []);
 
   // Estados Locais
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [produtoEditando, setProdutoEditando] = useState<any>(null);
-  const [produtoParaExcluir, setProdutoParaExcluir] = useState<any>(null);
+  const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
+  const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   // Filtros e Busca
@@ -101,7 +122,7 @@ export const TelaProdutos: React.FC = () => {
   }, [produtos, filtroCategoria, filtroStatus, buscaTexto]);
 
   // Funções de Modal
-  const abrirModal = useCallback((produto = null) => {
+  const abrirModal = useCallback((produto: Produto | null = null) => {
     setProdutoEditando(produto);
     if (produto) {
       setFormProduto({
@@ -258,7 +279,7 @@ export const TelaProdutos: React.FC = () => {
   }, [formProduto, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal]);
 
   // Excluir produto
-  const confirmarExclusao = useCallback((produto: any) => {
+  const confirmarExclusao = useCallback((produto: Produto) => {
     setProdutoParaExcluir(produto);
     setModalExclusaoAberto(true);
   }, []);
