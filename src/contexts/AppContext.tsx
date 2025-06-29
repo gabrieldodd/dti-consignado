@@ -1,7 +1,7 @@
 // src/contexts/AppContext.tsx
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 
-// Tipos básicos (definidos aqui para evitar problemas de import)
+// Tipos básicos
 type TipoMensagem = 'success' | 'error';
 type TipoUsuario = 'admin' | 'vendedor' | null;
 
@@ -63,7 +63,7 @@ const useCookies = (): CookieManager => {
   return { getCookie, setCookie, deleteCookie };
 };
 
-// Dados iniciais simplificados
+// Dados iniciais
 const VENDEDORES_INICIAIS = [
   { 
     id: 1, 
@@ -123,6 +123,19 @@ const PRODUTOS_INICIAIS = [
     estoqueMinimo: 3,
     ativo: true,
     dataCadastro: '2024-01-12'
+  },
+  {
+    id: 3,
+    nome: 'Carregador Portátil 10000mAh',
+    descricao: 'Power bank com entrada USB-C e saída rápida',
+    codigoBarras: '7891234567892',
+    categoria: 'Acessórios',
+    valorCusto: 45.00,
+    valorVenda: 89.00,
+    estoque: 2,
+    estoqueMinimo: 5,
+    ativo: true,
+    dataCadastro: '2024-01-15'
   }
 ];
 
@@ -140,6 +153,14 @@ const CATEGORIAS_INICIAIS = [
     nome: 'Acessórios',
     descricao: 'Acessórios diversos',
     cor: 'green',
+    ativa: true,
+    dataCadastro: '2024-01-01'
+  },
+  {
+    id: 3,
+    nome: 'Cabos',
+    descricao: 'Cabos e conectores diversos',
+    cor: 'yellow',
     ativa: true,
     dataCadastro: '2024-01-01'
   }
@@ -247,59 +268,30 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const salvarPreferencias = useCallback(() => {
     const preferencias = {
       tema: temaEscuro ? 'escuro' : 'claro',
-      ultimaAtividade: new Date().toISOString(),
-      versaoSistema: '1.0.0'
+      ultimaAtividade: new Date().toISOString()
     };
-
-    // Salvar cada preferência
-    Object.entries(preferencias).forEach(([chave, valor]) => {
-      setCookie(`sistema_${chave}`, valor.toString(), 365);
-    });
-
-    // Salvar dados do usuário se logado
-    if (usuarioLogado && tipoUsuario) {
-      setCookie('sistema_usuario_id', usuarioLogado.id.toString(), 7);
-      setCookie('sistema_tipo_usuario', tipoUsuario, 7);
-      setCookie('sistema_usuario_nome', usuarioLogado.nome, 7);
-      setCookie('sistema_ultimo_acesso', new Date().toISOString(), 30);
-    }
-
+    
+    setCookie('sistema_preferencias', JSON.stringify(preferencias), 365);
+    
     console.log('Preferências salvas:', preferencias);
-  }, [temaEscuro, usuarioLogado, tipoUsuario, setCookie]);
+  }, [temaEscuro, setCookie]);
 
   // Função para carregar preferências salvas
   const carregarPreferencias = useCallback(() => {
     try {
-      const preferencias = {
-        tema: getCookie('sistema_tema'),
-        ultimaAtividade: getCookie('sistema_ultima_atividade'),
-        versaoSistema: getCookie('sistema_versao_sistema'),
-        usuarioId: getCookie('sistema_usuario_id'),
-        tipoUsuario: getCookie('sistema_tipo_usuario'),
-        usuarioNome: getCookie('sistema_usuario_nome'),
-        ultimoAcesso: getCookie('sistema_ultimo_acesso')
-      };
-
-      console.log('Preferências carregadas:', preferencias);
-
-      // Aplicar tema se diferente do atual
-      if (preferencias.tema && (preferencias.tema === 'escuro') !== temaEscuro) {
-        setTemaEscuro(preferencias.tema === 'escuro');
+      const preferenciasSalvas = getCookie('sistema_preferencias');
+      if (preferenciasSalvas) {
+        const preferencias = JSON.parse(preferenciasSalvas);
+        console.log('Preferências carregadas:', preferencias);
+        return preferencias;
       }
-
-      return preferencias;
     } catch (error) {
       console.error('Erro ao carregar preferências:', error);
-      return null;
     }
-  }, [getCookie, temaEscuro]);
+    return null;
+  }, [getCookie]);
 
-  // Carregar preferências na inicialização
-  useEffect(() => {
-    carregarPreferencias();
-  }, [carregarPreferencias]);
-
-  // Limpar timeout de mensagem quando componente for desmontado
+  // Limpar timeout da mensagem quando componente é desmontado
   useEffect(() => {
     return () => {
       if (mensagemAtual?.timeout) {
@@ -308,24 +300,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     };
   }, [mensagemAtual]);
 
-  // Salvar preferências periodicamente enquanto usuário está ativo
-  useEffect(() => {
-    if (usuarioLogado) {
-      const interval = setInterval(() => {
-        salvarPreferencias();
-      }, 5 * 60 * 1000); // A cada 5 minutos
-
-      return () => clearInterval(interval);
-    }
-  }, [usuarioLogado, salvarPreferencias]);
-
-  // Context value otimizado
+  // Valor do contexto memoizado para performance
   const value = useMemo(() => ({
     // Tema
     temaEscuro,
-    setTemaEscuro: (novoTema: boolean) => {
-      setTemaEscuro(novoTema);
-      setCookie('sistema_tema', novoTema ? 'escuro' : 'claro', 365);
+    setTemaEscuro: (tema: boolean) => {
+      setTemaEscuro(tema);
+      setCookie('sistema_tema', tema ? 'escuro' : 'claro', 365);
     },
     tema,
     

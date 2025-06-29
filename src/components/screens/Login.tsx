@@ -189,7 +189,7 @@ export const Login: React.FC<LoginProps> = ({
               Verificando credenciais salvas...
             </h2>
             <p className={`text-sm ${tema.textoSecundario}`}>
-              Aguarde enquanto tentamos fazer login automaticamente
+              Aguarde um momento
             </p>
           </div>
         </div>
@@ -198,214 +198,171 @@ export const Login: React.FC<LoginProps> = ({
   }
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${tema.fundo} transition-colors duration-300`}>
-      <div className={`${tema.papel} p-8 rounded-lg shadow-lg border ${tema.borda} max-w-md w-full mx-4 transition-colors duration-300`}>
+    <div className={`min-h-screen flex items-center justify-center ${tema.fundo}`}>
+      <div className={`max-w-md w-full space-y-8 p-8 ${tema.papel} rounded-lg shadow-lg border ${tema.borda} mx-4`}>
         
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="mx-auto h-12 w-12 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-            <LogIn className="h-6 w-6 text-white" />
-          </div>
-          <h2 className={`text-2xl font-bold ${tema.texto} mb-2`}>
+        {/* Header do formulário */}
+        <div className="text-center">
+          <h2 className={`text-3xl font-extrabold ${tema.texto}`}>
             Sistema de Consignação
           </h2>
-          <p className={`text-sm ${tema.textoSecundario}`}>
+          <p className={`mt-2 text-sm ${tema.textoSecundario}`}>
             Faça login para acessar o sistema
           </p>
         </div>
 
+        {/* Botão de tema */}
+        {onToggleTema && (
+          <div className="flex justify-end">
+            <button
+              onClick={onToggleTema}
+              className={`p-2 rounded-md ${tema.hover} ${tema.texto} transition-colors`}
+              title={temaEscuro ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            >
+              {temaEscuro ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+          </div>
+        )}
+        
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          
+        <form className="space-y-6" onSubmit={handleSubmit}>
           {/* Campo Login */}
           <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-              Login <span className="text-red-500">*</span>
+            <label htmlFor="login" className={`block text-sm font-medium ${tema.texto}`}>
+              Login
             </label>
-            <input
-              type="text"
-              value={formLogin.login}
-              onChange={(e) => handleInputChange('login', e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={carregando}
-              className={`
-                block w-full px-3 py-2 border rounded-md 
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-                transition-colors duration-200
-                ${tema.input} 
-                ${erros.login ? 'border-red-500 focus:ring-red-500' : ''} 
-                ${carregando ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-              placeholder="Digite seu login"
-              autoComplete="username"
-              autoFocus
-            />
+            <div className="mt-1 relative">
+              <input
+                id="login"
+                type="text"
+                value={formLogin.login}
+                onChange={(e) => handleInputChange('login', e.target.value)}
+                onKeyPress={handleKeyPress}
+                className={`
+                  block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 
+                  focus:outline-none focus:ring-blue-500 focus:border-blue-500 
+                  ${erros.login ? 'border-red-500' : ''} ${tema.input}
+                `}
+                placeholder="Digite seu login"
+                autoComplete="username"
+                disabled={carregando}
+              />
+              {erros.login && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
+                </div>
+              )}
+            </div>
             {erros.login && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <AlertCircle className="h-4 w-4 mr-1" />
-                {erros.login}
-              </p>
+              <p className="mt-1 text-sm text-red-600">{erros.login}</p>
             )}
           </div>
 
           {/* Campo Senha */}
           <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-              Senha <span className="text-red-500">*</span>
+            <label htmlFor="senha" className={`block text-sm font-medium ${tema.texto}`}>
+              Senha
             </label>
-            <div className="relative">
+            <div className="mt-1 relative">
               <input
+                id="senha"
                 type={mostrarSenha ? 'text' : 'password'}
                 value={formLogin.senha}
                 onChange={(e) => handleInputChange('senha', e.target.value)}
                 onKeyPress={handleKeyPress}
-                disabled={carregando}
                 className={`
-                  block w-full px-3 py-2 pr-10 border rounded-md 
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
-                  transition-colors duration-200
-                  ${tema.input} 
-                  ${erros.senha ? 'border-red-500 focus:ring-red-500' : ''} 
-                  ${carregando ? 'opacity-50 cursor-not-allowed' : ''}
+                  block w-full px-3 py-2 pr-10 border rounded-md shadow-sm placeholder-gray-400 
+                  focus:outline-none focus:ring-blue-500 focus:border-blue-500 
+                  ${erros.senha ? 'border-red-500' : ''} ${tema.input}
                 `}
                 placeholder="Digite sua senha"
                 autoComplete="current-password"
+                disabled={carregando}
               />
               <button
                 type="button"
-                onClick={() => setMostrarSenha(prev => !prev)}
+                onClick={() => setMostrarSenha(!mostrarSenha)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                 disabled={carregando}
-                className={`
-                  absolute inset-y-0 right-0 flex items-center pr-3 
-                  ${carregando ? 'cursor-not-allowed' : 'cursor-pointer'} 
-                  ${tema.textoSecundario} hover:${tema.texto} transition-colors
-                `}
-                title={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
               >
-                {mostrarSenha ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {mostrarSenha ? (
+                  <EyeOff className={`h-5 w-5 ${tema.textoSecundario}`} />
+                ) : (
+                  <Eye className={`h-5 w-5 ${tema.textoSecundario}`} />
+                )}
               </button>
             </div>
             {erros.senha && (
-              <p className="mt-1 text-sm text-red-600 flex items-center">
-                <AlertCircle className="h-4 w-4 mr-1" />
-                {erros.senha}
-              </p>
+              <p className="mt-1 text-sm text-red-600">{erros.senha}</p>
             )}
           </div>
 
-          {/* Checkbox Lembrar Login */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="lembrar-login"
-                name="lembrar-login"
-                type="checkbox"
-                checked={lembrarLogin}
-                onChange={(e) => setLembrarLogin(e.target.checked)}
-                disabled={carregando}
-                className={`
-                  h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded
-                  ${carregando ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                `}
-              />
-              <label htmlFor="lembrar-login" className={`ml-2 block text-sm ${tema.textoSecundario} select-none`}>
-                Lembrar meu login
-              </label>
-            </div>
-            
-            {/* Link para esquecer credenciais */}
-            {(formLogin.login || getCookie('preferencias_login')) && (
-              <button
-                type="button"
-                onClick={esquecerCredenciais}
-                disabled={carregando}
-                className={`text-xs ${tema.link} transition-colors`}
-              >
-                Esquecer credenciais
-              </button>
-            )}
+          {/* Checkbox Lembrar */}
+          <div className="flex items-center">
+            <input
+              id="lembrar"
+              type="checkbox"
+              checked={lembrarLogin}
+              onChange={(e) => setLembrarLogin(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              disabled={carregando}
+            />
+            <label htmlFor="lembrar" className={`ml-2 block text-sm ${tema.texto}`}>
+              Lembrar meus dados
+            </label>
           </div>
 
-          {/* Botão Submit */}
-          <button
-            type="submit"
-            disabled={carregando}
-            className={`
-              group relative w-full flex justify-center py-2 px-4 border border-transparent 
-              text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 
-              focus:ring-blue-500 transition-colors duration-200
-              ${tema.botao}
-              ${carregando ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}
-            `}
-          >
-            {carregando ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Entrando...
-              </div>
-            ) : (
-              <div className="flex items-center">
-                <LogIn className="h-4 w-4 mr-2" />
-                Entrar
-              </div>
-            )}
-          </button>
-        </form>
-
-        {/* Botão de Toggle Tema */}
-        {onToggleTema && (
-          <div className="flex justify-center mt-6">
+          {/* Botão de Login */}
+          <div>
             <button
-              onClick={onToggleTema}
+              type="submit"
               disabled={carregando}
               className={`
-                p-2 rounded-full transition-colors duration-200
-                ${tema.hover} ${tema.textoSecundario}
-                ${carregando ? 'opacity-50 cursor-not-allowed' : ''}
+                group relative w-full flex justify-center py-2 px-4 border border-transparent 
+                text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 
+                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 
+                disabled:opacity-50 disabled:cursor-not-allowed transition-colors
               `}
-              title={temaEscuro ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
             >
-              {temaEscuro ? (
-                <Sun className="h-5 w-5 text-yellow-400" />
+              {carregando ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Entrando...
+                </div>
               ) : (
-                <Moon className="h-5 w-5 text-gray-600" />
+                <div className="flex items-center">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Entrar
+                </div>
               )}
             </button>
           </div>
-        )}
 
-        {/* Informações de Login para Desenvolvimento */}
-        <div className={`mt-6 p-3 rounded-md ${temaEscuro ? 'bg-gray-700' : 'bg-gray-50'} border ${tema.borda}`}>
-          <p className={`text-xs ${tema.textoSecundario} text-center mb-2 font-medium`}>
-            Credenciais para teste:
-          </p>
-          <div className={`text-xs ${tema.textoSecundario} space-y-1`}>
-            <div className="flex justify-between">
-              <span><strong>Admin:</strong></span>
-              <span>admin / admin123</span>
-            </div>
-            <div className="flex justify-between">
-              <span><strong>Vendedor:</strong></span>
-              <span>joao123 / 123456</span>
-            </div>
-          </div>
-          {lembrarLogin && (
-            <div className={`mt-2 pt-2 border-t ${tema.borda} text-center`}>
-              <p className={`text-xs ${tema.textoSecundario}`}>
-                ⚠️ Credenciais serão salvas para próximo acesso
-              </p>
+          {/* Link para esquecer credenciais salvas */}
+          {(getCookie('preferencias_login') || getCookie('preferencias_lembrar')) && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={esquecerCredenciais}
+                className={`text-sm ${tema.link} hover:underline`}
+                disabled={carregando}
+              >
+                Esquecer dados salvos
+              </button>
             </div>
           )}
-        </div>
+        </form>
 
-        {/* Status das Preferências Salvas */}
-        {getCookie('preferencias_login') && (
-          <div className={`mt-4 p-2 rounded-md ${temaEscuro ? 'bg-blue-900/20' : 'bg-blue-50'} border border-blue-200`}>
-            <p className={`text-xs text-center ${temaEscuro ? 'text-blue-300' : 'text-blue-700'}`}>
-              ✓ Login salvo: {getCookie('preferencias_login')}
-            </p>
+        {/* Credenciais de demonstração */}
+        <div className={`mt-6 p-4 ${tema.fundo} rounded-lg border ${tema.borda}`}>
+          <h3 className={`text-sm font-medium ${tema.texto} mb-2`}>
+            Credenciais para teste:
+          </h3>
+          <div className={`text-xs ${tema.textoSecundario} space-y-1`}>
+            <div><strong>Admin:</strong> admin / admin123</div>
+            <div><strong>Vendedor:</strong> joao123 / 123456</div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

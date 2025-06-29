@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { Menu } from 'lucide-react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
@@ -63,11 +64,21 @@ const AppContent: React.FC = () => {
   const [telaAtiva, setTelaAtiva] = useState('dashboard');
   const [menuAberto, setMenuAberto] = useState(false);
   const [verificandoLogin, setVerificandoLogin] = useState(true);
+  // NOVO: State para controlar logout manual
+  const [logoutManual, setLogoutManual] = useState(false);
 
-  // Verificar se há login salvo válido na inicialização
+  // Verificar se há login salvo válido na inicialização - CORRIGIDO
   useEffect(() => {
     const verificarLoginSalvo = async () => {
       try {
+        // NÃO fazer auto-login se foi logout manual recente
+        if (logoutManual) {
+          console.log('Logout manual detectado, pulando auto-login');
+          setLogoutManual(false); // Reset do flag
+          setVerificandoLogin(false);
+          return;
+        }
+
         const preferencias = {
           login: cookies.getCookie('preferencias_login'),
           senha: cookies.getCookie('preferencias_senha'),
@@ -98,7 +109,7 @@ const AppContent: React.FC = () => {
     };
 
     verificarLoginSalvo();
-  }, [cookies, mostrarMensagem]);
+  }, [cookies, mostrarMensagem, logoutManual]); // IMPORTANTE: Adicionar logoutManual nas dependências
 
   // Função para validar credenciais
   const validarCredenciais = useCallback(async (login: string, senha: string): Promise<boolean> => {
@@ -125,14 +136,26 @@ const AppContent: React.FC = () => {
     return false;
   }, [vendedores, setUsuarioLogado, setTipoUsuario]);
 
-  // Função de login com persistência
+  // Função de login com persistência - CORRIGIDA
   const fazerLogin = useCallback(async (login: string, senha: string, lembrar: boolean = false) => {
     try {
+      // Reset do flag de logout manual quando faz login intencional
+      setLogoutManual(false);
+      
       const loginValido = await validarCredenciais(login, senha);
 
       if (loginValido) {
         // Salvar timestamp do login
         cookies.setCookie('sistema_timestamp_login', new Date().toISOString(), 7);
+        
+        // Salvar preferências se solicitado
+        if (lembrar) {
+          cookies.setCookie('preferencias_login', login, 30);
+          cookies.setCookie('preferencias_senha', senha, 7);
+          cookies.setCookie('preferencias_lembrar', 'true', 30);
+          cookies.setCookie('preferencias_auto_login', 'true', 7);
+          cookies.setCookie('preferencias_ultimo_login', new Date().toISOString(), 30);
+        }
         
         // Registrar atividade
         salvarPreferencias();
@@ -159,47 +182,88 @@ const AppContent: React.FC = () => {
       console.error('Erro no login:', error);
       mostrarMensagem('error', 'Erro interno. Tente novamente.');
     }
-  }, [validarCredenciais, mostrarMensagem, cookies, salvarPreferencias]);
+  }, [validarCredenciais, mostrarMensagem, cookies, salvarPreferencias, setLogoutManual]);
 
-  // Função de logout com limpeza de preferências
+  // Função de logout com limpeza de preferências - CORRIGIDA
   const fazerLogout = useCallback(() => {
     try {
-      // Salvar preferências antes do logout (exceto dados do usuário)
-      const manterPreferencias = {
-        tema: temaEscuro ? 'escuro' : 'claro'
-      };
+      console.log('Iniciando logout...');
+      
+      // CRÍTICO: Marcar que foi logout manual para evitar auto-login
+      setLogoutManual(true);
       
       // Limpar dados do usuário
       setUsuarioLogado(null);
       setTipoUsuario(null);
       setTelaAtiva('dashboard');
       
-      // Manter apenas o tema, limpar dados de sessão
+      // Limpar cookies de sessão
       cookies.deleteCookie('sistema_usuario_id');
       cookies.deleteCookie('sistema_tipo_usuario');
       cookies.deleteCookie('sistema_usuario_nome');
       cookies.deleteCookie('sistema_timestamp_login');
       
-      // Verificar se deve manter login salvo
+      // CRÍTICO: Sempre desabilitar auto-login no logout
+      cookies.deleteCookie('preferencias_auto_login');
+      
+      // Verificar se deve manter credenciais salvas para próximo login manual
       const manterLogin = cookies.getCookie('preferencias_lembrar') === 'true';
+      
       if (!manterLogin) {
+        // Se não quer manter, limpar tudo
         cookies.deleteCookie('preferencias_login');
         cookies.deleteCookie('preferencias_senha');
-        cookies.deleteCookie('preferencias_auto_login');
         cookies.deleteCookie('preferencias_ultimo_login');
+        cookies.deleteCookie('preferencias_lembrar');
       }
       
       mostrarMensagem('success', 'Logout realizado com sucesso!');
       
       console.log('Logout realizado:', { 
-        manterLogin,
-        manterPreferencias,
+        manterCredenciais: manterLogin,
         timestamp: new Date().toISOString() 
       });
+      
     } catch (error) {
       console.error('Erro no logout:', error);
+      mostrarMensagem('error', 'Erro durante logout, mas você foi desconectado.');
     }
-  }, [setUsuarioLogado, setTipoUsuario, temaEscuro, cookies, mostrarMensagem]);
+  }, [setUsuarioLogado, setTipoUsuario, setTelaAtiva, cookies, mostrarMensagem, setLogoutManual]);
+
+  // OPCIONAL: Função para logout completo (limpa tudo)
+  const fazerLogoutCompleto = useCallback(() => {
+    try {
+      console.log('Fazendo logout completo...');
+      
+      // Limpar todos os estados
+      setUsuarioLogado(null);
+      setTipoUsuario(null);
+      setTelaAtiva('dashboard');
+      setLogoutManual(true);
+      
+      // Limpar TODOS os cookies relacionados ao login
+      const cookiesParaLimpar = [
+        'sistema_usuario_id',
+        'sistema_tipo_usuario', 
+        'sistema_usuario_nome',
+        'sistema_timestamp_login',
+        'preferencias_login',
+        'preferencias_senha',
+        'preferencias_auto_login',
+        'preferencias_ultimo_login',
+        'preferencias_lembrar'
+      ];
+      
+      cookiesParaLimpar.forEach(cookie => {
+        cookies.deleteCookie(cookie);
+      });
+      
+      mostrarMensagem('success', 'Logout completo realizado!');
+      
+    } catch (error) {
+      console.error('Erro no logout completo:', error);
+    }
+  }, [setUsuarioLogado, setTipoUsuario, setTelaAtiva, setLogoutManual, cookies, mostrarMensagem]);
 
   // Função para mudar tela
   const mudarTela = useCallback((tela: string) => {
