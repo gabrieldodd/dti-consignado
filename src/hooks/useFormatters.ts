@@ -130,6 +130,7 @@ export const useFormatters = () => {
     formatarData,
     formatarDataHora,
     formatarMoeda,
+    formatarMoedaBR: formatarMoeda, // Alias para compatibilidade
     formatarPorcentagem,
     formatarCPF,
     formatarCNPJ,

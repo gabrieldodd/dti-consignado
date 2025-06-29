@@ -229,6 +229,39 @@ export const useValidation = () => {
     return idade >= idadeMinima;
   }, []);
 
+  // Validar código de barras (EAN-13, EAN-8, UPC-A)
+  const validarCodigoBarras = useCallback((codigo: string): boolean => {
+    if (!codigo) return false;
+    
+    const limpo = codigo.replace(/\D/g, '');
+    
+    // Verificar comprimentos válidos
+    if (![8, 12, 13].includes(limpo.length)) return false;
+    
+    // Para EAN-8 (8 dígitos)
+    if (limpo.length === 8) {
+      let soma = 0;
+      for (let i = 0; i < 7; i++) {
+        const peso = i % 2 === 0 ? 3 : 1;
+        soma += parseInt(limpo[i]) * peso;
+      }
+      const digitoVerificador = (10 - (soma % 10)) % 10;
+      return digitoVerificador === parseInt(limpo[7]);
+    }
+    
+    // Para UPC-A (12 dígitos) e EAN-13 (13 dígitos)
+    const tamanho = limpo.length;
+    let soma = 0;
+    
+    for (let i = 0; i < tamanho - 1; i++) {
+      const peso = i % 2 === 0 ? 1 : 3;
+      soma += parseInt(limpo[i]) * peso;
+    }
+    
+    const digitoVerificador = (10 - (soma % 10)) % 10;
+    return digitoVerificador === parseInt(limpo[tamanho - 1]);
+  }, []);
+
   return {
     validarEmail,
     validarTelefone,
@@ -245,6 +278,7 @@ export const useValidation = () => {
     validarTamanhoMaximo,
     validarDataFutura,
     validarDataPassada,
-    validarIdadeMinima
+    validarIdadeMinima,
+    validarCodigoBarras
   };
 };
