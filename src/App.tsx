@@ -18,7 +18,7 @@ const TelaConsignacoes = () => {
   );
 };
 
-const TelaVendedores = () => {
+/* const TelaVendedores = () => {
   const { tema } = useAppContext();
   return (
     <div className={`p-6 ${tema.fundo} min-h-screen`}>
@@ -28,7 +28,10 @@ const TelaVendedores = () => {
       </div>
     </div>
   );
-};
+};*/
+
+case 'vendedores':
+  return <TelaVendedores />;
 
 const TelaProdutos = () => {
   const { tema } = useAppContext();
