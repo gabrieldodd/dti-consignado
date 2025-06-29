@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Menu } from 'lucide-react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { Login } from './components/screens/Login';
@@ -60,6 +60,7 @@ const AppContent: React.FC = () => {
     usuarioLogado, 
     setUsuarioLogado,
     setTipoUsuario,
+    tipoUsuario,
     vendedores,
     mostrarMensagem,
     tema,
@@ -111,14 +112,14 @@ const AppContent: React.FC = () => {
     setMenuAberto(false); // Fecha menu mobile ao navegar
   }, []);
 
-  // Função para alternar tema
+  // Função para alternar tema - CORRETO: Usando apenas valor boolean
   const toggleTema = useCallback(() => {
-    setTemaEscuro(prev => !prev);
-  }, [setTemaEscuro]);
+    setTemaEscuro(!temaEscuro);
+  }, [temaEscuro, setTemaEscuro]);
 
   // Função para controlar menu mobile
   const toggleMenu = useCallback(() => {
-    setMenuAberto(prev => !prev);
+    setMenuAberto((prev: boolean) => !prev);
   }, []);
 
   const fecharMenu = useCallback(() => {
@@ -163,12 +164,13 @@ const AppContent: React.FC = () => {
         />
       )}
 
-      {/* Menu Lateral */}
+      {/* Menu Lateral - COM TODAS AS PROPS NECESSÁRIAS */}
       <MenuLateral 
         telaAtiva={telaAtiva}
         onMudarTela={mudarTela}
         menuAberto={menuAberto}
         onFecharMenu={fecharMenu}
+        tipoUsuario={tipoUsuario}
         usuarioLogado={usuarioLogado}
         onToggleTema={toggleTema}
         onLogout={fazerLogout}
