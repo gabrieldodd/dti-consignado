@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
 import { Login } from './components/screens/Login';
 import { Dashboard } from './components/screens/Dashboard';
+import { TelaVendedores } from './components/screens/TelaVendedores';
 import { MenuLateral } from './components/layout/MenuLateral';
 
 // Componentes de tela (temporários - serão criados depois)
@@ -17,21 +18,6 @@ const TelaConsignacoes = () => {
     </div>
   );
 };
-
-/* const TelaVendedores = () => {
-  const { tema } = useAppContext();
-  return (
-    <div className={`p-6 ${tema.fundo} min-h-screen`}>
-      <h1 className={`text-3xl font-bold ${tema.texto} mb-6`}>Vendedores</h1>
-      <div className={`${tema.papel} p-6 rounded-lg shadow-sm border ${tema.borda}`}>
-        <p className={tema.textoSecundario}>Tela de Vendedores em desenvolvimento...</p>
-      </div>
-    </div>
-  );
-};*/
-
-case 'vendedores':
-  return <TelaVendedores />;
 
 const TelaProdutos = () => {
   const { tema } = useAppContext();
