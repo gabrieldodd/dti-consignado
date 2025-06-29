@@ -18,6 +18,8 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
+import { useFormatters } from '../../hooks/useFormatters';
+import { useValidation } from '../../hooks/useValidation';
 
 interface VendedorForm {
   nome: string;
@@ -40,7 +42,7 @@ const FORM_INICIAL: VendedorForm = {
 };
 
 export const TelaVendedores: React.FC = () => {
-  // Context
+  // Context e Hooks
   const { 
     tema, 
     vendedores, 
@@ -48,6 +50,9 @@ export const TelaVendedores: React.FC = () => {
     mostrarMensagem,
     tipoUsuario 
   } = useAppContext();
+  
+  const { formatarTelefone, formatarData } = useFormatters();
+  const { validarEmail, validarTelefone } = useValidation();
 
   // Estados Locais
   const [modalAberto, setModalAberto] = useState(false);
@@ -64,37 +69,13 @@ export const TelaVendedores: React.FC = () => {
   const [buscaTexto, setBuscaTexto] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
 
-  // Funções de formatação
-  const formatarTelefone = useCallback((telefone: string) => {
-    const limpo = telefone.replace(/\D/g, '');
-    if (limpo.length <= 10) {
-      return limpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
-    }
-    return limpo.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  }, []);
-
-  const formatarData = useCallback((data: string) => {
-    return new Date(data).toLocaleDateString('pt-BR');
-  }, []);
-
-  // Funções de validação
-  const validarEmail = useCallback((email: string) => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
-  }, []);
-
-  const validarTelefone = useCallback((telefone: string) => {
-    const limpo = telefone.replace(/\D/g, '');
-    return limpo.length >= 10;
-  }, []);
-
   // Dados filtrados
   const vendedoresFiltrados = useMemo(() => {
     return vendedores.filter(vendedor => {
       const matchBusca = !buscaTexto || 
         vendedor.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        vendedor.email.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        vendedor.login.toLowerCase().includes(buscaTexto.toLowerCase());
+        vendedor.login.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        (vendedor.email && vendedor.email.toLowerCase().includes(buscaTexto.toLowerCase()));
       
       const matchStatus = filtroStatus === 'todos' || 
         vendedor.status.toLowerCase() === filtroStatus.toLowerCase();
@@ -111,15 +92,13 @@ export const TelaVendedores: React.FC = () => {
       errors.nome = 'Nome é obrigatório';
     }
 
-    if (!formData.email.trim()) {
-      errors.email = 'Email é obrigatório';
-    } else if (!validarEmail(formData.email)) {
+    // Email opcional, mas se preenchido deve ser válido
+    if (formData.email.trim() && !validarEmail(formData.email)) {
       errors.email = 'Email inválido';
     }
 
-    if (!formData.telefone.trim()) {
-      errors.telefone = 'Telefone é obrigatório';
-    } else if (!validarTelefone(formData.telefone)) {
+    // Telefone opcional, mas se preenchido deve ser válido
+    if (formData.telefone.trim() && !validarTelefone(formData.telefone)) {
       errors.telefone = 'Telefone inválido';
     }
 
@@ -150,13 +129,15 @@ export const TelaVendedores: React.FC = () => {
       errors.login = 'Login já existe';
     }
 
-    // Verificar se email já existe
-    const emailExiste = vendedores.some(v => 
-      v.email === formData.email && 
-      (!vendedorEditando || v.id !== vendedorEditando.id)
-    );
-    if (emailExiste) {
-      errors.email = 'Email já cadastrado';
+    // Verificar se email já existe (apenas se preenchido)
+    if (formData.email.trim()) {
+      const emailExiste = vendedores.some(v => 
+        v.email === formData.email && 
+        (!vendedorEditando || v.id !== vendedorEditando.id)
+      );
+      if (emailExiste) {
+        errors.email = 'Email já cadastrado';
+      }
     }
 
     setFormErrors(errors);
@@ -168,8 +149,8 @@ export const TelaVendedores: React.FC = () => {
     setVendedorEditando(vendedor || null);
     setFormData(vendedor ? {
       nome: vendedor.nome,
-      email: vendedor.email,
-      telefone: vendedor.telefone,
+      email: vendedor.email || '',
+      telefone: vendedor.telefone || '',
       login: vendedor.login,
       senha: '',
       confirmarSenha: '',
@@ -200,8 +181,8 @@ export const TelaVendedores: React.FC = () => {
         const vendedorAtualizado = {
           ...vendedorEditando,
           nome: formData.nome.trim(),
-          email: formData.email.trim(),
-          telefone: formData.telefone.trim(),
+          email: formData.email.trim() || '',
+          telefone: formData.telefone.trim() || '',
           login: formData.login.trim(),
           status: formData.status,
           ...(formData.senha && { senha: formData.senha })
@@ -216,8 +197,8 @@ export const TelaVendedores: React.FC = () => {
         const novoVendedor = {
           id: Math.max(...vendedores.map(v => v.id), 0) + 1,
           nome: formData.nome.trim(),
-          email: formData.email.trim(),
-          telefone: formData.telefone.trim(),
+          email: formData.email.trim() || '',
+          telefone: formData.telefone.trim() || '',
           login: formData.login.trim(),
           senha: formData.senha,
           status: formData.status,
@@ -291,7 +272,7 @@ export const TelaVendedores: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
-                placeholder="Buscar vendedores..."
+                placeholder="Buscar por nome ou login..."
                 value={buscaTexto}
                 onChange={(e) => setBuscaTexto(e.target.value)}
                 className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
@@ -378,9 +359,11 @@ export const TelaVendedores: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm ${tema.texto}`}>{vendedor.email}</div>
+                          <div className={`text-sm ${tema.texto}`}>
+                            {vendedor.email || <span className={tema.textoSecundario}>-</span>}
+                          </div>
                           <div className={`text-sm ${tema.textoSecundario}`}>
-                            {formatarTelefone(vendedor.telefone)}
+                            {vendedor.telefone ? formatarTelefone(vendedor.telefone) : '-'}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -447,16 +430,20 @@ export const TelaVendedores: React.FC = () => {
                     </div>
                     
                     <div className="space-y-2 mb-4">
-                      <div className="flex items-center">
-                        <Mail className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                        <span className={`text-sm ${tema.texto}`}>{vendedor.email}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <Phone className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                        <span className={`text-sm ${tema.texto}`}>
-                          {formatarTelefone(vendedor.telefone)}
-                        </span>
-                      </div>
+                      {vendedor.email && (
+                        <div className="flex items-center">
+                          <Mail className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
+                          <span className={`text-sm ${tema.texto}`}>{vendedor.email}</span>
+                        </div>
+                      )}
+                      {vendedor.telefone && (
+                        <div className="flex items-center">
+                          <Phone className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
+                          <span className={`text-sm ${tema.texto}`}>
+                            {formatarTelefone(vendedor.telefone)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center">
                         <User className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
                         <span className={`text-sm ${tema.texto}`}>{vendedor.login}</span>
@@ -537,14 +524,14 @@ export const TelaVendedores: React.FC = () => {
                     {/* Email */}
                     <div>
                       <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Email *
+                        Email
                       </label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.email ? 'border-red-500' : ''}`}
-                        placeholder="email@exemplo.com"
+                        placeholder="email@exemplo.com (opcional)"
                       />
                       {formErrors.email && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
@@ -554,14 +541,14 @@ export const TelaVendedores: React.FC = () => {
                     {/* Telefone */}
                     <div>
                       <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Telefone *
+                        Telefone
                       </label>
                       <input
                         type="tel"
                         value={formData.telefone}
                         onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.telefone ? 'border-red-500' : ''}`}
-                        placeholder="(11) 99999-9999"
+                        placeholder="(11) 99999-9999 (opcional)"
                       />
                       {formErrors.telefone && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.telefone}</p>
@@ -578,7 +565,7 @@ export const TelaVendedores: React.FC = () => {
                         value={formData.login}
                         onChange={(e) => setFormData(prev => ({ ...prev, login: e.target.value }))}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.login ? 'border-red-500' : ''}`}
-                        placeholder="login_usuario"
+                        placeholder="Digite o nome de usuário"
                       />
                       {formErrors.login && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.login}</p>
