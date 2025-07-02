@@ -179,6 +179,7 @@ export const TelaConsignacoes: React.FC = () => {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalRetornoAberto, setModalRetornoAberto] = useState(false);
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
+  const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
   const [consignacaoRetorno, setConsignacaoRetorno] = useState<Consignacao | null>(null);
   const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<Consignacao | null>(null);
   
@@ -279,6 +280,14 @@ export const TelaConsignacoes: React.FC = () => {
     setConsignacaoDetalhes(null);
   }, []);
 
+  const abrirModalConfirmacao = useCallback(() => {
+    setModalConfirmacaoAberto(true);
+  }, []);
+
+  const fecharModalConfirmacao = useCallback(() => {
+    setModalConfirmacaoAberto(false);
+  }, []);
+
   // Funções do modal de retorno
   const lerCodigoRetorno = useCallback(() => {
     if (!codigoLeitura.trim()) {
@@ -366,8 +375,9 @@ export const TelaConsignacoes: React.FC = () => {
     ));
 
     mostrarMensagem('success', 'Consignação finalizada com sucesso!');
+    fecharModalConfirmacao();
     fecharModalRetorno();
-  }, [consignacaoRetorno, retornoForm, setConsignacoes, mostrarMensagem, fecharModalRetorno]);
+  }, [consignacaoRetorno, retornoForm, setConsignacoes, mostrarMensagem, fecharModalConfirmacao, fecharModalRetorno]);
 
   // Função para excluir consignação
   const excluirConsignacao = useCallback((consignacao: Consignacao) => {
@@ -943,9 +953,8 @@ export const TelaConsignacoes: React.FC = () => {
                       Cancelar
                     </button>
                     <button
-                      onClick={finalizarConsignacao}
-                      disabled={retornoForm.quantidadeRetornada === 0}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      onClick={abrirModalConfirmacao}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
                     >
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Finalizar Consignação
@@ -1109,6 +1118,168 @@ export const TelaConsignacoes: React.FC = () => {
                         Conferir Retorno
                       </button>
                     )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Confirmação de Finalização */}
+        {modalConfirmacaoAberto && consignacaoRetorno && (
+          <div className="fixed inset-0 z-[60] overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalConfirmacao}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="sm:flex sm:items-start">
+                    <div className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${
+                      retornoForm.quantidadeRetornada === 0 
+                        ? 'bg-yellow-100' 
+                        : 'bg-green-100'
+                    } sm:mx-0 sm:h-10 sm:w-10`}>
+                      {retornoForm.quantidadeRetornada === 0 ? (
+                        <AlertTriangle className={`h-6 w-6 ${
+                          retornoForm.quantidadeRetornada === 0 
+                            ? 'text-yellow-600' 
+                            : 'text-green-600'
+                        }`} />
+                      ) : (
+                        <CheckCircle className="h-6 w-6 text-green-600" />
+                      )}
+                    </div>
+                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
+                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
+                        Confirmar Finalização da Consignação
+                      </h3>
+                      <div className="mt-4">
+                        <div className={`${tema.papel} border ${tema.borda} rounded-lg p-4 mb-4`}>
+                          <h4 className={`font-medium ${tema.texto} mb-3`}>Resumo da Operação</h4>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className={`font-medium ${tema.textoSecundario}`}>Cliente:</span>
+                              <p className={tema.texto}>{consignacaoRetorno.clienteNome}</p>
+                            </div>
+                            <div>
+                              <span className={`font-medium ${tema.textoSecundario}`}>Vendedor:</span>
+                              <p className={tema.texto}>{consignacaoRetorno.vendedor.nome}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-center">
+                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Consignados</p>
+                                <p className={`text-xl font-bold ${tema.texto}`}>
+                                  {consignacaoRetorno.quantidadeTotal}
+                                </p>
+                                <p className={`text-sm ${tema.textoSecundario}`}>
+                                  {formatarMoedaBR(consignacaoRetorno.valorTotal)}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Retornados</p>
+                                <p className={`text-xl font-bold ${retornoForm.quantidadeRetornada > 0 ? 'text-blue-600' : tema.texto}`}>
+                                  {retornoForm.quantidadeRetornada}
+                                </p>
+                                <p className={`text-sm ${tema.textoSecundario}`}>
+                                  {formatarMoedaBR(retornoForm.valorRetornado)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className={`mt-4 pt-4 border-t border-gray-200 ${
+                            (consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada) > 0 
+                              ? 'bg-green-50 border-green-200 p-3 rounded-lg' 
+                              : ''
+                          }`}>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="text-center">
+                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Vendidos</p>
+                                <p className={`text-2xl font-bold ${
+                                  (consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada) > 0 
+                                    ? 'text-green-600' 
+                                    : tema.texto
+                                }`}>
+                                  {consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada}
+                                </p>
+                              </div>
+                              <div className="text-center">
+                                <p className={`text-sm ${tema.textoSecundario}`}>Valor a Receber</p>
+                                <p className={`text-2xl font-bold ${
+                                  (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) > 0 
+                                    ? 'text-green-600' 
+                                    : (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) === 0
+                                    ? tema.texto
+                                    : 'text-red-600'
+                                }`}>
+                                  {formatarMoedaBR(consignacaoRetorno.valorTotal - retornoForm.valorRetornado)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Mensagens baseadas no cenário */}
+                        {retornoForm.quantidadeRetornada === 0 ? (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                            <div className="flex">
+                              <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <h4 className="text-sm font-medium text-yellow-800">
+                                  Nenhum produto retornado
+                                </h4>
+                                <p className="text-sm text-yellow-700 mt-1">
+                                  Você está finalizando esta consignação sem produtos retornados. 
+                                  Isso significa que o cliente vendeu todos os {consignacaoRetorno.quantidadeTotal} produtos 
+                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valorTotal)}.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div className="flex">
+                              <CheckCircle className="h-5 w-5 text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <h4 className="text-sm font-medium text-blue-800">
+                                  Retorno processado
+                                </h4>
+                                <p className="text-sm text-blue-700 mt-1">
+                                  {retornoForm.quantidadeRetornada} produto(s) retornado(s) no valor de {formatarMoedaBR(retornoForm.valorRetornado)}. 
+                                  O cliente vendeu {consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada} produto(s) 
+                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valorTotal - retornoForm.valorRetornado)}.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <p className={`text-sm ${tema.textoSecundario}`}>
+                          Ao confirmar, esta consignação será marcada como finalizada e não poderá ser alterada.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                    <button
+                      onClick={finalizarConsignacao}
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Confirmar Finalização
+                    </button>
+                    <button
+                      onClick={fecharModalConfirmacao}
+                      className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm`}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </button>
                   </div>
                 </div>
               </div>
