@@ -1,72 +1,54 @@
 // src/hooks/useValidation.ts
 import { useCallback } from 'react';
 
-/**
- * Hook customizado para validações
- */
 export const useValidation = () => {
-  // Validar email
-  const validarEmail = useCallback((email: string): boolean => {
-    if (!email) return false;
-    
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
-  }, []);
-
-  // Validar telefone brasileiro
-  const validarTelefone = useCallback((telefone: string): boolean => {
-    if (!telefone) return false;
-    
-    const limpo = telefone.replace(/\D/g, '');
-    return limpo.length >= 10 && limpo.length <= 11;
-  }, []);
-
-  // Validar CPF
+  // Validador de CPF
   const validarCPF = useCallback((cpf: string): boolean => {
-    if (!cpf) return false;
+    // Remove formatação
+    const numerosCPF = cpf.replace(/\D/g, '');
     
-    const limpo = cpf.replace(/\D/g, '');
+    // Verifica se tem 11 dígitos
+    if (numerosCPF.length !== 11) return false;
     
-    if (limpo.length !== 11) return false;
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(numerosCPF)) return false;
     
-    // Verificar se todos os dígitos são iguais
-    if (/^(\d)\1{10}$/.test(limpo)) return false;
-    
-    // Validar dígitos verificadores
+    // Validação do primeiro dígito verificador
     let soma = 0;
     for (let i = 0; i < 9; i++) {
-      soma += parseInt(limpo.charAt(i)) * (10 - i);
+      soma += parseInt(numerosCPF.charAt(i)) * (10 - i);
     }
-    let resto = (soma * 10) % 11;
+    let resto = 11 - (soma % 11);
     if (resto === 10 || resto === 11) resto = 0;
-    if (resto !== parseInt(limpo.charAt(9))) return false;
+    if (resto !== parseInt(numerosCPF.charAt(9))) return false;
     
+    // Validação do segundo dígito verificador
     soma = 0;
     for (let i = 0; i < 10; i++) {
-      soma += parseInt(limpo.charAt(i)) * (11 - i);
+      soma += parseInt(numerosCPF.charAt(i)) * (11 - i);
     }
-    resto = (soma * 10) % 11;
+    resto = 11 - (soma % 11);
     if (resto === 10 || resto === 11) resto = 0;
-    if (resto !== parseInt(limpo.charAt(10))) return false;
+    if (resto !== parseInt(numerosCPF.charAt(10))) return false;
     
     return true;
   }, []);
 
-  // Validar CNPJ
+  // Validador de CNPJ
   const validarCNPJ = useCallback((cnpj: string): boolean => {
-    if (!cnpj) return false;
+    // Remove formatação
+    const numerosCNPJ = cnpj.replace(/\D/g, '');
     
-    const limpo = cnpj.replace(/\D/g, '');
+    // Verifica se tem 14 dígitos
+    if (numerosCNPJ.length !== 14) return false;
     
-    if (limpo.length !== 14) return false;
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{13}$/.test(numerosCNPJ)) return false;
     
-    // Verificar se todos os dígitos são iguais
-    if (/^(\d)\1{13}$/.test(limpo)) return false;
-    
-    // Validar primeiro dígito verificador
-    let tamanho = limpo.length - 2;
-    let numeros = limpo.substring(0, tamanho);
-    let digitos = limpo.substring(tamanho);
+    // Validação do primeiro dígito verificador
+    let tamanho = numerosCNPJ.length - 2;
+    let numeros = numerosCNPJ.substring(0, tamanho);
+    let digitos = numerosCNPJ.substring(tamanho);
     let soma = 0;
     let pos = tamanho - 7;
     
@@ -78,9 +60,9 @@ export const useValidation = () => {
     let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
     if (resultado !== parseInt(digitos.charAt(0))) return false;
     
-    // Validar segundo dígito verificador
+    // Validação do segundo dígito verificador
     tamanho = tamanho + 1;
-    numeros = limpo.substring(0, tamanho);
+    numeros = numerosCNPJ.substring(0, tamanho);
     soma = 0;
     pos = tamanho - 7;
     
@@ -95,68 +77,68 @@ export const useValidation = () => {
     return true;
   }, []);
 
-  // Validar documento (CPF ou CNPJ)
-  const validarDocumento = useCallback((documento: string): boolean => {
-    if (!documento) return false;
-    
-    const limpo = documento.replace(/\D/g, '');
-    
-    if (limpo.length === 11) {
-      return validarCPF(documento);
-    } else if (limpo.length === 14) {
-      return validarCNPJ(documento);
-    }
-    
-    return false;
-  }, [validarCPF, validarCNPJ]);
-
-  // Validar CEP
-  const validarCEP = useCallback((cep: string): boolean => {
-    if (!cep) return false;
-    
-    const limpo = cep.replace(/\D/g, '');
-    return limpo.length === 8;
+  // Validador de email
+  const validarEmail = useCallback((email: string): boolean => {
+    const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regexEmail.test(email.trim().toLowerCase());
   }, []);
 
-  // Validar senha forte
+  // Validador de telefone
+  const validarTelefone = useCallback((telefone: string): boolean => {
+    const numerosTelefone = telefone.replace(/\D/g, '');
+    // Aceita telefones com 10 ou 11 dígitos (fixo ou celular)
+    return numerosTelefone.length >= 10 && numerosTelefone.length <= 11;
+  }, []);
+
+  // Validador de CEP
+  const validarCEP = useCallback((cep: string): boolean => {
+    const numerosCEP = cep.replace(/\D/g, '');
+    return numerosCEP.length === 8;
+  }, []);
+
+  // Validador de senha forte
   const validarSenhaForte = useCallback((senha: string): {
-    valida: boolean;
-    erros: string[];
+    isValid: boolean;
+    errors: string[];
   } => {
-    const erros: string[] = [];
-    
-    if (!senha) {
-      erros.push('Senha é obrigatória');
-      return { valida: false, erros };
-    }
+    const errors: string[] = [];
     
     if (senha.length < 8) {
-      erros.push('Senha deve ter pelo menos 8 caracteres');
-    }
-    
-    if (!/[A-Z]/.test(senha)) {
-      erros.push('Senha deve ter pelo menos uma letra maiúscula');
+      errors.push('Deve ter pelo menos 8 caracteres');
     }
     
     if (!/[a-z]/.test(senha)) {
-      erros.push('Senha deve ter pelo menos uma letra minúscula');
+      errors.push('Deve conter pelo menos uma letra minúscula');
+    }
+    
+    if (!/[A-Z]/.test(senha)) {
+      errors.push('Deve conter pelo menos uma letra maiúscula');
     }
     
     if (!/\d/.test(senha)) {
-      erros.push('Senha deve ter pelo menos um número');
+      errors.push('Deve conter pelo menos um número');
     }
     
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(senha)) {
-      erros.push('Senha deve ter pelo menos um caractere especial');
+      errors.push('Deve conter pelo menos um caractere especial');
     }
     
-    return { valida: erros.length === 0, erros };
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }, []);
 
-  // Validar URL
+  // Validador de código de barras (formato simples)
+  const validarCodigoBarras = useCallback((codigo: string): boolean => {
+    const numerosCodigo = codigo.replace(/\D/g, '');
+    // Aceita códigos com 8, 12, 13 ou 14 dígitos (formatos comuns)
+    const formatosValidos = [8, 12, 13, 14];
+    return formatosValidos.includes(numerosCodigo.length);
+  }, []);
+
+  // Validador de URL
   const validarURL = useCallback((url: string): boolean => {
-    if (!url) return false;
-    
     try {
       new URL(url);
       return true;
@@ -165,120 +147,142 @@ export const useValidation = () => {
     }
   }, []);
 
-  // Validar número positivo
-  const validarNumeroPositivo = useCallback((numero: any): boolean => {
-    const num = Number(numero);
-    return !isNaN(num) && num > 0;
+  // Validador de idade mínima
+  const validarIdadeMinima = useCallback((dataNascimento: string, idadeMinima: number = 18): boolean => {
+    try {
+      const nascimento = new Date(dataNascimento);
+      const hoje = new Date();
+      const idade = hoje.getFullYear() - nascimento.getFullYear();
+      const mês = hoje.getMonth() - nascimento.getMonth();
+      
+      if (mês < 0 || (mês === 0 && hoje.getDate() < nascimento.getDate())) {
+        return idade - 1 >= idadeMinima;
+      }
+      
+      return idade >= idadeMinima;
+    } catch {
+      return false;
+    }
   }, []);
 
-  // Validar número inteiro
-  const validarInteiro = useCallback((numero: any): boolean => {
-    const num = Number(numero);
-    return !isNaN(num) && Number.isInteger(num);
-  }, []);
-
-  // Validar campo obrigatório
+  // Validador de campo obrigatório
   const validarObrigatorio = useCallback((valor: any): boolean => {
     if (valor === null || valor === undefined) return false;
     if (typeof valor === 'string') return valor.trim().length > 0;
+    if (typeof valor === 'number') return !isNaN(valor);
     if (Array.isArray(valor)) return valor.length > 0;
     return true;
   }, []);
 
-  // Validar tamanho mínimo
-  const validarTamanhoMinimo = useCallback((valor: string, minimo: number): boolean => {
-    if (!valor) return false;
-    return valor.length >= minimo;
+  // Validador de tamanho mínimo
+  const validarTamanhoMinimo = useCallback((valor: string, tamanhoMinimo: number): boolean => {
+    return valor.trim().length >= tamanhoMinimo;
   }, []);
 
-  // Validar tamanho máximo
-  const validarTamanhoMaximo = useCallback((valor: string, maximo: number): boolean => {
-    if (!valor) return true; // Se vazio, não valida tamanho
-    return valor.length <= maximo;
+  // Validador de tamanho máximo
+  const validarTamanhoMaximo = useCallback((valor: string, tamanhoMaximo: number): boolean => {
+    return valor.trim().length <= tamanhoMaximo;
   }, []);
 
-  // Validar data no futuro
-  const validarDataFutura = useCallback((data: string | Date): boolean => {
-    if (!data) return false;
-    
-    const dataObj = typeof data === 'string' ? new Date(data) : data;
-    return dataObj > new Date();
+  // Validador de valor numérico
+  const validarNumero = useCallback((valor: string): boolean => {
+    return !isNaN(parseFloat(valor)) && isFinite(parseFloat(valor));
   }, []);
 
-  // Validar data no passado
-  const validarDataPassada = useCallback((data: string | Date): boolean => {
-    if (!data) return false;
-    
-    const dataObj = typeof data === 'string' ? new Date(data) : data;
-    return dataObj < new Date();
+  // Validador de valor numérico positivo
+  const validarNumeroPositivo = useCallback((valor: string | number): boolean => {
+    const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
+    return !isNaN(numero) && numero > 0;
   }, []);
 
-  // Validar idade mínima
-  const validarIdadeMinima = useCallback((dataNascimento: string | Date, idadeMinima: number): boolean => {
-    if (!dataNascimento) return false;
-    
-    const nascimento = typeof dataNascimento === 'string' ? new Date(dataNascimento) : dataNascimento;
-    const hoje = new Date();
-    const idade = hoje.getFullYear() - nascimento.getFullYear();
-    const m = hoje.getMonth() - nascimento.getMonth();
-    
-    if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
-      return (idade - 1) >= idadeMinima;
+  // Validador de valor numérico não negativo
+  const validarNumeroNaoNegativo = useCallback((valor: string | number): boolean => {
+    const numero = typeof valor === 'string' ? parseFloat(valor) : valor;
+    return !isNaN(numero) && numero >= 0;
+  }, []);
+
+  // Validador de intervalo numérico
+  const validarIntervalo = useCallback((valor: number, min: number, max: number): boolean => {
+    return valor >= min && valor <= max;
+  }, []);
+
+  // Validador de data futura
+  const validarDataFutura = useCallback((data: string): boolean => {
+    try {
+      const dataObj = new Date(data);
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0); // Remove horas para comparar apenas datas
+      return dataObj > hoje;
+    } catch {
+      return false;
     }
-    
-    return idade >= idadeMinima;
   }, []);
 
-  // Validar código de barras (EAN-13, EAN-8, UPC-A)
-  const validarCodigoBarras = useCallback((codigo: string): boolean => {
-    if (!codigo) return false;
-    
-    const limpo = codigo.replace(/\D/g, '');
-    
-    // Verificar comprimentos válidos
-    if (![8, 12, 13].includes(limpo.length)) return false;
-    
-    // Para EAN-8 (8 dígitos)
-    if (limpo.length === 8) {
-      let soma = 0;
-      for (let i = 0; i < 7; i++) {
-        const peso = i % 2 === 0 ? 3 : 1;
-        soma += parseInt(limpo[i]) * peso;
-      }
-      const digitoVerificador = (10 - (soma % 10)) % 10;
-      return digitoVerificador === parseInt(limpo[7]);
+  // Validador de data passada
+  const validarDataPassada = useCallback((data: string): boolean => {
+    try {
+      const dataObj = new Date(data);
+      const hoje = new Date();
+      hoje.setHours(23, 59, 59, 999); // Final do dia atual
+      return dataObj < hoje;
+    } catch {
+      return false;
     }
-    
-    // Para UPC-A (12 dígitos) e EAN-13 (13 dígitos)
-    const tamanho = limpo.length;
-    let soma = 0;
-    
-    for (let i = 0; i < tamanho - 1; i++) {
-      const peso = i % 2 === 0 ? 1 : 3;
-      soma += parseInt(limpo[i]) * peso;
-    }
-    
-    const digitoVerificador = (10 - (soma % 10)) % 10;
-    return digitoVerificador === parseInt(limpo[tamanho - 1]);
+  }, []);
+
+  // Validador de formato de arquivo
+  const validarFormatoArquivo = useCallback((nomeArquivo: string, formatosPermitidos: string[]): boolean => {
+    const extensao = nomeArquivo.split('.').pop()?.toLowerCase();
+    return extensao ? formatosPermitidos.includes(extensao) : false;
+  }, []);
+
+  // Validador de tamanho de arquivo
+  const validarTamanhoArquivo = useCallback((arquivo: File, tamanhoMaximoMB: number): boolean => {
+    const tamanhoMaximoBytes = tamanhoMaximoMB * 1024 * 1024;
+    return arquivo.size <= tamanhoMaximoBytes;
+  }, []);
+
+  // Validador de confirmação de senha
+  const validarConfirmacaoSenha = useCallback((senha: string, confirmacao: string): boolean => {
+    return senha === confirmacao && senha.length > 0;
   }, []);
 
   return {
-    validarEmail,
-    validarTelefone,
+    // Validadores de documentos
     validarCPF,
     validarCNPJ,
-    validarDocumento,
+    
+    // Validadores de contato
+    validarEmail,
+    validarTelefone,
     validarCEP,
+    
+    // Validadores de segurança
     validarSenhaForte,
+    validarConfirmacaoSenha,
+    
+    // Validadores de produtos
+    validarCodigoBarras,
+    
+    // Validadores genéricos
     validarURL,
-    validarNumeroPositivo,
-    validarInteiro,
+    validarIdadeMinima,
     validarObrigatorio,
     validarTamanhoMinimo,
     validarTamanhoMaximo,
+    
+    // Validadores numéricos
+    validarNumero,
+    validarNumeroPositivo,
+    validarNumeroNaoNegativo,
+    validarIntervalo,
+    
+    // Validadores de data
     validarDataFutura,
     validarDataPassada,
-    validarIdadeMinima,
-    validarCodigoBarras
+    
+    // Validadores de arquivo
+    validarFormatoArquivo,
+    validarTamanhoArquivo
   };
 };

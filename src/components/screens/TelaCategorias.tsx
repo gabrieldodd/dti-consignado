@@ -1,35 +1,36 @@
-// TelaCategorias.tsx - Versão Otimizada para Evitar Travamentos
+// src/components/screens/TelaCategorias.tsx
 import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { 
-  Tags, 
+  Tag, 
   Plus, 
   Search, 
   Edit, 
   Trash2, 
-  Eye, 
-  X, 
-  Save,
   AlertTriangle,
-  Package,
-  BarChart3,
+  CheckCircle,
+  X,
+  Save,
+  Eye,
+  EyeOff,
   Palette,
+  Archive,
+  ArchiveRestore,
   Grid,
   List
 } from 'lucide-react';
 
-// Hook imports
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
 
-// Interfaces otimizadas
+// Interfaces
 interface Categoria {
   id: number;
   nome: string;
   descricao: string;
   cor: string;
   ativa: boolean;
-  dataCadastro: string;
+  data_cadastro: string;
 }
 
 interface CategoriaForm {
@@ -39,14 +40,19 @@ interface CategoriaForm {
   ativa: boolean;
 }
 
-interface Produto {
-  id: number;
-  nome: string;
-  categoria: string;
-  ativo: boolean;
-}
+// Cores disponíveis para categorias
+const CORES_DISPONIVEIS = [
+  { valor: 'blue', nome: 'Azul', classe: 'bg-blue-100 text-blue-800', corFundo: 'bg-blue-500' },
+  { valor: 'green', nome: 'Verde', classe: 'bg-green-100 text-green-800', corFundo: 'bg-green-500' },
+  { valor: 'yellow', nome: 'Amarelo', classe: 'bg-yellow-100 text-yellow-800', corFundo: 'bg-yellow-500' },
+  { valor: 'purple', nome: 'Roxo', classe: 'bg-purple-100 text-purple-800', corFundo: 'bg-purple-500' },
+  { valor: 'red', nome: 'Vermelho', classe: 'bg-red-100 text-red-800', corFundo: 'bg-red-500' },
+  { valor: 'pink', nome: 'Rosa', classe: 'bg-pink-100 text-pink-800', corFundo: 'bg-pink-500' },
+  { valor: 'indigo', nome: 'Índigo', classe: 'bg-indigo-100 text-indigo-800', corFundo: 'bg-indigo-500' },
+  { valor: 'gray', nome: 'Cinza', classe: 'bg-gray-100 text-gray-800', corFundo: 'bg-gray-500' }
+];
 
-// Formulário inicial
+// Form inicial
 const FORM_INICIAL: CategoriaForm = {
   nome: '',
   descricao: '',
@@ -54,53 +60,44 @@ const FORM_INICIAL: CategoriaForm = {
   ativa: true
 };
 
-// Cores disponíveis com otimização
-const CORES_DISPONIVEIS = [
-  { valor: 'blue', nome: 'Azul', classe: 'bg-blue-500', classeTexto: 'bg-blue-100 text-blue-800 border-blue-200' },
-  { valor: 'green', nome: 'Verde', classe: 'bg-green-500', classeTexto: 'bg-green-100 text-green-800 border-green-200' },
-  { valor: 'red', nome: 'Vermelho', classe: 'bg-red-500', classeTexto: 'bg-red-100 text-red-800 border-red-200' },
-  { valor: 'yellow', nome: 'Amarelo', classe: 'bg-yellow-500', classeTexto: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  { valor: 'purple', nome: 'Roxo', classe: 'bg-purple-500', classeTexto: 'bg-purple-100 text-purple-800 border-purple-200' },
-  { valor: 'pink', nome: 'Rosa', classe: 'bg-pink-500', classeTexto: 'bg-pink-100 text-pink-800 border-pink-200' },
-  { valor: 'indigo', nome: 'Índigo', classe: 'bg-indigo-500', classeTexto: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  { valor: 'orange', nome: 'Laranja', classe: 'bg-orange-500', classeTexto: 'bg-orange-100 text-orange-800 border-orange-200' },
-  { valor: 'teal', nome: 'Verde Água', classe: 'bg-teal-500', classeTexto: 'bg-teal-100 text-teal-800 border-teal-200' },
-  { valor: 'gray', nome: 'Cinza', classe: 'bg-gray-500', classeTexto: 'bg-gray-100 text-gray-800 border-gray-200' }
-] as const;
-
-// Componente de estatísticas memoizado
-const EstatisticasCategorias = memo(({ categorias, produtos, tema }: { 
-  categorias: Categoria[], 
-  produtos: Produto[],
-  tema: any 
-}) => {
+// Componente de estatísticas
+const EstatisticasCategorias = memo(() => {
+  const { tema, categorias, produtos } = useAppContext();
+  
   const estatisticas = useMemo(() => {
-    const total = categorias.length;
     const ativas = categorias.filter(c => c.ativa).length;
     const inativas = categorias.filter(c => !c.ativa).length;
+    const total = categorias.length;
     
-    // Contar produtos por categoria de forma otimizada
+    // Contagem de produtos por categoria
     const produtosPorCategoria = produtos.reduce((acc, produto) => {
-      if (produto.ativo) {
-        acc[produto.categoria] = (acc[produto.categoria] || 0) + 1;
-      }
+      acc[produto.categoria] = (acc[produto.categoria] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-
-    const categoriasComProdutos = Object.keys(produtosPorCategoria).length;
     
-    return { total, ativas, inativas, categoriasComProdutos };
+    const categoriaMaisUsada = Object.entries(produtosPorCategoria)
+      .sort(([,a], [,b]) => b - a)[0];
+    
+    return { 
+      ativas, 
+      inativas, 
+      total, 
+      categoriaMaisUsada: categoriaMaisUsada ? {
+        nome: categoriaMaisUsada[0],
+        quantidade: categoriaMaisUsada[1]
+      } : null
+    };
   }, [categorias, produtos]);
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
         <div className="flex items-center justify-between">
           <div>
             <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
             <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.total}</p>
           </div>
-          <Tags className="h-8 w-8 text-blue-600" />
+          <Tag className="h-8 w-8 text-blue-600" />
         </div>
       </div>
 
@@ -110,7 +107,7 @@ const EstatisticasCategorias = memo(({ categorias, produtos, tema }: {
             <p className={`text-sm ${tema.textoSecundario}`}>Ativas</p>
             <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.ativas}</p>
           </div>
-          <Package className="h-8 w-8 text-green-600" />
+          <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
       </div>
 
@@ -120,177 +117,142 @@ const EstatisticasCategorias = memo(({ categorias, produtos, tema }: {
             <p className={`text-sm ${tema.textoSecundario}`}>Inativas</p>
             <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.inativas}</p>
           </div>
-          <X className="h-8 w-8 text-red-600" />
+          <Archive className="h-8 w-8 text-gray-600" />
         </div>
       </div>
 
       <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
         <div className="flex items-center justify-between">
           <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Com Produtos</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.categoriasComProdutos}</p>
+            <p className={`text-sm ${tema.textoSecundario}`}>Mais Usada</p>
+            <p className={`text-lg font-bold ${tema.texto}`}>
+              {estatisticas.categoriaMaisUsada?.nome || 'N/A'}
+            </p>
+            {estatisticas.categoriaMaisUsada && (
+              <p className={`text-xs ${tema.textoSecundario}`}>
+                {estatisticas.categoriaMaisUsada.quantidade} produtos
+              </p>
+            )}
           </div>
-          <BarChart3 className="h-8 w-8 text-purple-600" />
+          <Palette className="h-8 w-8 text-purple-600" />
         </div>
       </div>
     </div>
   );
 });
 
-// Componente de seletor de cor memoizado
-const SeletorCor = memo(({ corSelecionada, onCorChange, tema }: {
-  corSelecionada: string;
-  onCorChange: (cor: string) => void;
-  tema: any;
-}) => {
-  return (
-    <div>
-      <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-        Cor *
-      </label>
-      <div className="grid grid-cols-5 gap-2">
-        {CORES_DISPONIVEIS.map((cor) => (
-          <button
-            key={cor.valor}
-            type="button"
-            onClick={() => onCorChange(cor.valor)}
-            className={`
-              relative w-10 h-10 rounded-full ${cor.classe} 
-              border-2 ${corSelecionada === cor.valor ? 'border-gray-800' : 'border-gray-300'}
-              hover:scale-110 transition-all duration-200
-            `}
-            title={cor.nome}
-          >
-            {corSelecionada === cor.valor && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-2 h-2 bg-white rounded-full"></div>
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-      <p className={`text-xs ${tema.textoSecundario} mt-1`}>
-        Cor selecionada: {CORES_DISPONIVEIS.find(c => c.valor === corSelecionada)?.nome}
-      </p>
-    </div>
-  );
-});
-
-// Componente principal otimizado
+// Componente principal
 export const TelaCategorias: React.FC = () => {
   // Context e Hooks
   const { 
     tema, 
-    categorias, 
-    setCategorias,
+    categorias,
     produtos,
     mostrarMensagem,
-    cookies 
+    cookies,
+    tipoUsuario,
+    adicionarCategoria,
+    atualizarCategoria,
+    excluirCategoria,
+    loadingCategorias,
+    errorCategorias
   } = useAppContext();
   
-  const { formatarData, formatarNumero, capitalizarPalavras } = useFormatters();
-  const { validarObrigatorio, validarTamanhoMinimo, validarTamanhoMaximo } = useValidation();
-  // Estados com inicialização otimizada
+  const { formatarData, capitalizarPalavras } = useFormatters();
+  const { validarObrigatorio } = useValidation();
+
+  // Loading e Erro
+  if (loadingCategorias) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando categorias...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorCategorias) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar categorias</p>
+          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorCategorias}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Estados
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
   const [categoriaParaExcluir, setCategoriaParaExcluir] = useState<Categoria | null>(null);
   const [categoriaDetalhes, setCategoriaDetalhes] = useState<Categoria | null>(null);
-  const [formData, setFormData] = useState<CategoriaForm>(FORM_INICIAL);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
-  const [visualizacao, setVisualizacao] = useState<'lista' | 'grid'>('grid');
+  const [visualizacao, setVisualizacao] = useState<'grid' | 'lista'>('grid');
+  
+  // Filtros
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusCategorias') || 'todas';
+  });
+  const [buscaTexto, setBuscaTexto] = useState('');
 
-  // Filtros com carregamento otimizado dos cookies
-  const [filtros, setFiltros] = useState(() => ({
-    status: cookies.getCookie('filtroStatusCategorias') || 'todos',
-    cor: cookies.getCookie('filtroCorCategorias') || 'todas',
-    busca: ''
-  }));
+  // Estados do formulário
+  const [formCategoria, setFormCategoria] = useState<CategoriaForm>(FORM_INICIAL);
+  const [formErrors, setFormErrors] = useState<any>({});
 
-  // Função para contar produtos por categoria memoizada
-  const contarProdutosPorCategoria = useCallback((nomeCategoria: string) => {
-    return produtos.filter(produto => produto.categoria === nomeCategoria && produto.ativo).length;
+  // Salvar filtros nos cookies
+  useEffect(() => {
+    cookies.setCookie('filtroStatusCategorias', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
+
+  // Contar produtos por categoria
+  const contarProdutosPorCategoria = useCallback((nomeCategoria: string): number => {
+    return produtos.filter(p => p.categoria === nomeCategoria && p.ativo).length;
   }, [produtos]);
 
-  // Salvar filtros nos cookies de forma otimizada
-  const salvarFiltros = useCallback((novosFiltros: Partial<typeof filtros>) => {
-    setFiltros(prev => {
-      const filtrosAtualizados = { ...prev, ...novosFiltros };
-      
-      // Salvar nos cookies apenas se mudaram
-      if (novosFiltros.status && novosFiltros.status !== prev.status) {
-        cookies.setCookie('filtroStatusCategorias', novosFiltros.status, 30);
-      }
-      if (novosFiltros.cor && novosFiltros.cor !== prev.cor) {
-        cookies.setCookie('filtroCorCategorias', novosFiltros.cor, 30);
-      }
-      
-      return filtrosAtualizados;
-    });
-  }, [cookies]);
-
-  // Categorias filtradas memoizadas
+  // Filtrar categorias
   const categoriasFiltradas = useMemo(() => {
-    return categorias.filter(categoria => {
-      const passaStatus = filtros.status === 'todos' || 
-        (filtros.status === 'ativas' && categoria.ativa) ||
-        (filtros.status === 'inativas' && !categoria.ativa);
-      
-      const passaCor = filtros.cor === 'todas' || categoria.cor === filtros.cor;
-      
-      const passaBusca = !filtros.busca || 
-        categoria.nome.toLowerCase().includes(filtros.busca.toLowerCase()) ||
-        categoria.descricao.toLowerCase().includes(filtros.busca.toLowerCase());
-      
-      return passaStatus && passaCor && passaBusca;
-    });
-  }, [categorias, filtros]);
+    let resultado = categorias;
 
-  // Validação memoizada
-  const validarFormulario = useCallback(() => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.nome.trim()) {
-      errors.nome = 'Nome da categoria é obrigatório';
-    } else if (formData.nome.trim().length < 2) {
-      errors.nome = 'Nome deve ter pelo menos 2 caracteres';
-    } else if (formData.nome.trim().length > 50) {
-      errors.nome = 'Nome deve ter no máximo 50 caracteres';
+    if (filtroStatus !== 'todas') {
+      const statusFiltro = filtroStatus === 'ativa';
+      resultado = resultado.filter(c => c.ativa === statusFiltro);
     }
 
-    // Verificar nome duplicado
-    const nomeExiste = categorias.some(categoria => 
-      categoria.nome.toLowerCase() === formData.nome.trim().toLowerCase() &&
-      categoria.id !== categoriaEditando?.id
-    );
-    
-    if (nomeExiste) {
-      errors.nome = 'Já existe uma categoria com este nome';
+    if (buscaTexto) {
+      resultado = resultado.filter(c => 
+        c.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        (c.descricao && c.descricao.toLowerCase().includes(buscaTexto.toLowerCase()))
+      );
     }
 
-    if (formData.descricao.length > 200) {
-      errors.descricao = 'Descrição deve ter no máximo 200 caracteres';
-    }
+    return resultado;
+  }, [categorias, filtroStatus, buscaTexto]);
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData, categorias, categoriaEditando]);
-
-  // Handlers otimizados com useCallback
+  // Handlers modais
   const abrirModal = useCallback((categoria?: Categoria) => {
     if (categoria) {
       setCategoriaEditando(categoria);
-      setFormData({
+      setFormCategoria({
         nome: categoria.nome,
-        descricao: categoria.descricao,
+        descricao: categoria.descricao || '',
         cor: categoria.cor,
         ativa: categoria.ativa
       });
     } else {
       setCategoriaEditando(null);
-      setFormData(FORM_INICIAL);
+      setFormCategoria(FORM_INICIAL);
     }
     setFormErrors({});
     setModalAberto(true);
@@ -299,9 +261,25 @@ export const TelaCategorias: React.FC = () => {
   const fecharModal = useCallback(() => {
     setModalAberto(false);
     setCategoriaEditando(null);
-    setFormData(FORM_INICIAL);
+    setFormCategoria(FORM_INICIAL);
     setFormErrors({});
-    setSalvando(false);
+  }, []);
+
+  const abrirModalExclusao = useCallback((categoria: Categoria) => {
+    const produtosVinculados = contarProdutosPorCategoria(categoria.nome);
+    if (produtosVinculados > 0) {
+      mostrarMensagem('error', 
+        `Não é possível excluir a categoria "${categoria.nome}" pois há ${produtosVinculados} produto(s) vinculado(s) a ela.`
+      );
+      return;
+    }
+    setCategoriaParaExcluir(categoria);
+    setModalExclusaoAberto(true);
+  }, [contarProdutosPorCategoria, mostrarMensagem]);
+
+  const fecharModalExclusao = useCallback(() => {
+    setModalExclusaoAberto(false);
+    setCategoriaParaExcluir(null);
   }, []);
 
   const abrirModalDetalhes = useCallback((categoria: Categoria) => {
@@ -314,650 +292,668 @@ export const TelaCategorias: React.FC = () => {
     setCategoriaDetalhes(null);
   }, []);
 
-  const confirmarExclusao = useCallback((categoria: Categoria) => {
-    const quantidadeProdutos = contarProdutosPorCategoria(categoria.nome);
-    if (quantidadeProdutos > 0) {
-      mostrarMensagem('error', `Não é possível excluir. Categoria possui ${quantidadeProdutos} produto(s) ativo(s).`);
-      return;
+  // Validação do formulário
+  const validarFormulario = useCallback(() => {
+    const errors: any = {};
+
+    if (!validarObrigatorio(formCategoria.nome)) {
+      errors.nome = 'Nome é obrigatório';
     }
 
-    setCategoriaParaExcluir(categoria);
-    setModalExclusaoAberto(true);
-  }, [contarProdutosPorCategoria, mostrarMensagem]);
+    if (!validarObrigatorio(formCategoria.cor)) {
+      errors.cor = 'Cor é obrigatória';
+    }
 
-  const excluirCategoria = useCallback(() => {
-    if (!categoriaParaExcluir) return;
-
-    setCategorias(prev => prev.filter(categoria => categoria.id !== categoriaParaExcluir.id));
-    mostrarMensagem('success', 'Categoria excluída com sucesso!');
-    setModalExclusaoAberto(false);
-    setCategoriaParaExcluir(null);
-  }, [categoriaParaExcluir, setCategorias, mostrarMensagem]);
-
-  const alternarStatus = useCallback((categoria: Categoria) => {
-    if (categoria.ativa) {
-      const quantidadeProdutos = contarProdutosPorCategoria(categoria.nome);
-      if (quantidadeProdutos > 0) {
-        mostrarMensagem('error', `Não é possível desativar. Categoria possui ${quantidadeProdutos} produto(s) ativo(s).`);
-        return;
+    // Verificar nome duplicado
+    if (!categoriaEditando || formCategoria.nome !== categoriaEditando.nome) {
+      const nomeExiste = categorias.some(c => 
+        c.nome.toLowerCase() === formCategoria.nome.toLowerCase() && c.id !== categoriaEditando?.id
+      );
+      if (nomeExiste) {
+        errors.nome = 'Já existe uma categoria com este nome';
       }
     }
 
-    setCategorias(prev => prev.map(c => 
-      c.id === categoria.id 
-        ? { ...c, ativa: !c.ativa }
-        : c
-    ));
-    const novoStatus = categoria.ativa ? 'desativada' : 'ativada';
-    mostrarMensagem('success', `Categoria ${novoStatus} com sucesso!`);
-  }, [setCategorias, mostrarMensagem, contarProdutosPorCategoria]);
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formCategoria, categoriaEditando, categorias, validarObrigatorio]);
 
+  // Salvar categoria
   const salvarCategoria = useCallback(async () => {
     if (!validarFormulario()) return;
 
     setSalvando(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay
-
-      const categoriaData = {
-        nome: capitalizarPalavras(formData.nome.trim()),
-        descricao: formData.descricao.trim(),
-        cor: formData.cor,
-        ativa: formData.ativa
+      const dadosCategoria = {
+        nome: capitalizarPalavras(formCategoria.nome),
+        descricao: formCategoria.descricao || null,
+        cor: formCategoria.cor,
+        ativa: formCategoria.ativa
       };
 
       if (categoriaEditando) {
-        setCategorias(prev => prev.map(categoria =>
-          categoria.id === categoriaEditando.id
-            ? { ...categoria, ...categoriaData }
-            : categoria
-        ));
-        mostrarMensagem('success', 'Categoria atualizada com sucesso!');
+        // Atualizar categoria existente
+        const resultado = await atualizarCategoria(categoriaEditando.id, dadosCategoria);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Categoria atualizada com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao atualizar categoria');
+        }
       } else {
-        const novaCategoria: Categoria = {
-          ...categoriaData,
-          id: Math.max(...categorias.map(c => c.id), 0) + 1,
-          dataCadastro: new Date().toISOString().split('T')[0]
-        };
-        setCategorias(prev => [...prev, novaCategoria]);
-        mostrarMensagem('success', 'Categoria criada com sucesso!');
+        // Criar nova categoria
+        const resultado = await adicionarCategoria(dadosCategoria);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Categoria criada com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao criar categoria');
+        }
       }
-
-      fecharModal();
     } catch (error) {
-      console.error('Erro ao salvar categoria:', error);
       mostrarMensagem('error', 'Erro ao salvar categoria');
     } finally {
       setSalvando(false);
     }
-  }, [validarFormulario, formData, categoriaEditando, categorias, setCategorias, mostrarMensagem, fecharModal, capitalizarPalavras]);
+  }, [formCategoria, categoriaEditando, capitalizarPalavras, validarFormulario, adicionarCategoria, atualizarCategoria, mostrarMensagem, fecharModal]);
 
-  // Atualizar busca com debounce implícito
-  const atualizarBusca = useCallback((valor: string) => {
-    salvarFiltros({ busca: valor });
-  }, [salvarFiltros]);
+  // Confirmar exclusão
+  const confirmarExclusao = useCallback(async () => {
+    if (!categoriaParaExcluir) return;
 
-  // Renderizar categoria no grid
+    setSalvando(true);
+    
+    try {
+      const resultado = await excluirCategoria(categoriaParaExcluir.id);
+      if (resultado.success) {
+        mostrarMensagem('success', `Categoria "${categoriaParaExcluir.nome}" excluída com sucesso!`);
+        fecharModalExclusao();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao excluir categoria');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro ao excluir categoria');
+    } finally {
+      setSalvando(false);
+    }
+  }, [categoriaParaExcluir, excluirCategoria, mostrarMensagem, fecharModalExclusao]);
+
+  // Obter classe da cor
+  const obterClasseCor = useCallback((cor: string): string => {
+    const corInfo = CORES_DISPONIVEIS.find(c => c.valor === cor);
+    return corInfo?.classe || 'bg-gray-100 text-gray-800';
+  }, []);
+
+  // Renderizar categoria em grid
   const renderizarCategoriaGrid = useCallback((categoria: Categoria) => {
     const quantidadeProdutos = contarProdutosPorCategoria(categoria.nome);
+    const corInfo = CORES_DISPONIVEIS.find(c => c.valor === categoria.cor);
     
     return (
-      <div key={categoria.id} className={`${tema.papel} rounded-lg border ${tema.borda} p-4 hover:shadow-md transition-shadow`}>
+      <div
+        key={categoria.id}
+        className={`${tema.papel} rounded-lg border ${tema.borda} p-4 hover:shadow-md transition-shadow cursor-pointer`}
+        onClick={() => abrirModalDetalhes(categoria)}
+      >
         <div className="flex items-center justify-between mb-3">
-          <h3 className={`text-lg font-semibold ${tema.texto}`}>
-            {categoria.nome}
-          </h3>
+          <div className={`w-8 h-8 rounded-full ${corInfo?.corFundo || 'bg-gray-500'}`}></div>
           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            categoria.ativa 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-red-100 text-red-800'
+            categoria.ativa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
           }`}>
             {categoria.ativa ? 'Ativa' : 'Inativa'}
           </span>
         </div>
         
+        <h3 className={`text-lg font-semibold ${tema.texto} mb-2`}>
+          {categoria.nome}
+        </h3>
+        
         {categoria.descricao && (
-          <div className={`text-sm ${tema.textoSecundario} mb-2`}>
-            {categoria.descricao}
-          </div>
+          <p className={`text-sm ${tema.textoSecundario} mb-3`}>
+            {categoria.descricao.length > 100 
+              ? `${categoria.descricao.substring(0, 100)}...`
+              : categoria.descricao
+            }
+          </p>
         )}
         
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center">
-            <div className={`w-4 h-4 rounded-full mr-2 ${CORES_DISPONIVEIS.find(c => c.valor === categoria.cor)?.classe || 'bg-gray-500'}`}></div>
-            <span className={`text-sm ${tema.textoSecundario}`}>
-              {CORES_DISPONIVEIS.find(c => c.valor === categoria.cor)?.nome || 'Indefinida'}
-            </span>
-          </div>
-          <span className={`text-sm ${tema.texto}`}>
-            {formatarNumero(quantidadeProdutos)} produto(s)
+        <div className="flex items-center justify-between">
+          <span className={`text-sm ${tema.textoSecundario}`}>
+            {quantidadeProdutos} produto(s)
           </span>
-        </div>
-        
-        <div className="flex items-center justify-end space-x-3">
-          <button
-            onClick={() => abrirModalDetalhes(categoria)}
-            className="text-blue-600 hover:text-blue-700"
-            title="Ver detalhes"
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => abrirModal(categoria)}
-            className="text-indigo-600 hover:text-indigo-700"
-            title="Editar"
-          >
-            <Edit className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => alternarStatus(categoria)}
-            className={categoria.ativa ? "text-yellow-600 hover:text-yellow-700" : "text-green-600 hover:text-green-700"}
-            title={categoria.ativa ? "Desativar" : "Ativar"}
-          >
-            {categoria.ativa ? <X className="h-4 w-4" /> : <Tags className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={() => confirmarExclusao(categoria)}
-            className="text-red-600 hover:text-red-700"
-            title="Excluir"
-            disabled={quantidadeProdutos > 0}
-          >
-            <Trash2 className={`h-4 w-4 ${quantidadeProdutos > 0 ? 'opacity-50' : ''}`} />
-          </button>
+          
+          {tipoUsuario === 'admin' && (
+            <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => abrirModal(categoria)}
+                className="text-blue-600 hover:text-blue-700"
+                title="Editar categoria"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => abrirModalExclusao(categoria)}
+                className="text-red-600 hover:text-red-700"
+                title="Excluir categoria"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
-  }, [tema, contarProdutosPorCategoria, formatarNumero, abrirModalDetalhes, abrirModal, alternarStatus, confirmarExclusao]);
+  }, [tema, contarProdutosPorCategoria, tipoUsuario, abrirModalDetalhes, abrirModal, abrirModalExclusao]);
+
+  // Verificar permissões
+  const podeGerenciar = tipoUsuario === 'admin';
 
   return (
-    <div className={`p-6 ${tema.fundo} min-h-screen`}>
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div className="mb-4 lg:mb-0">
-          <h1 className={`text-3xl font-bold ${tema.texto} mb-2`}>Categorias</h1>
-          <p className={`${tema.textoSecundario}`}>
-            Organize os produtos em categorias para facilitar a gestão
-          </p>
-        </div>
-        <button
-          onClick={() => abrirModal()}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Categoria
-        </button>
-      </div>
-
-      {/* Estatísticas Memoizadas */}
-      <EstatisticasCategorias categorias={categorias} produtos={produtos} tema={tema} />
-
-      {/* Filtros */}
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
+      <div className="container mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Buscar
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text"
-                value={filtros.busca}
-                onChange={(e) => atualizarBusca(e.target.value)}
-                placeholder="Nome ou descrição..."
-                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-              />
-            </div>
+            <h1 className={`text-2xl font-bold ${tema.texto} flex items-center`}>
+              <Tag className="mr-3 h-6 w-6" />
+              Categorias
+            </h1>
+            <p className={`text-sm ${tema.textoSecundario}`}>
+              Gerencie as categorias de produtos
+            </p>
           </div>
-
-          <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Status
-            </label>
-            <select
-              value={filtros.status}
-              onChange={(e) => salvarFiltros({ status: e.target.value })}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todos">Todos</option>
-              <option value="ativas">Ativas</option>
-              <option value="inativas">Inativas</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Cor
-            </label>
-            <select
-              value={filtros.cor}
-              onChange={(e) => salvarFiltros({ cor: e.target.value })}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todas">Todas</option>
-              {CORES_DISPONIVEIS.map((cor) => (
-                <option key={cor.valor} value={cor.valor}>
-                  {cor.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Visualização
-            </label>
-            <div className="flex border rounded-md overflow-hidden">
+          
+          <div className="flex items-center space-x-2">
+            {/* Alternar visualização */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setVisualizacao('grid')}
-                className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                className={`p-2 rounded ${
                   visualizacao === 'grid'
                     ? 'bg-blue-600 text-white'
                     : `${tema.papel} ${tema.texto} hover:${tema.hover}`
                 }`}
               >
-                <Grid className="h-4 w-4 mx-auto" />
+                <Grid className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setVisualizacao('lista')}
-                className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                className={`p-2 rounded ${
                   visualizacao === 'lista'
                     ? 'bg-blue-600 text-white'
                     : `${tema.papel} ${tema.texto} hover:${tema.hover}`
                 }`}
               >
-                <List className="h-4 w-4 mx-auto" />
+                <List className="h-4 w-4" />
               </button>
             </div>
+            
+            {podeGerenciar && (
+              <button
+                onClick={() => abrirModal()}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Categoria
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Lista/Grid de Categorias */}
-      {visualizacao === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {categoriasFiltradas.map(renderizarCategoriaGrid)}
-        </div>
-      ) : (
-        <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className={tema.fundo}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Categoria
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Cor
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Produtos
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Status
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Data
-                  </th>
-                  <th className={`px-6 py-3 text-right text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-                {categoriasFiltradas.map((categoria) => {
-                  const quantidadeProdutos = contarProdutosPorCategoria(categoria.nome);
-                  
-                  return (
-                    <tr key={categoria.id} className={tema.hover}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium ${tema.texto}`}>
-                          {categoria.nome}
-                        </div>
-                        {categoria.descricao && (
-                          <div className={`text-sm ${tema.textoSecundario}`}>
-                            {categoria.descricao}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className={`w-4 h-4 rounded-full mr-2 ${CORES_DISPONIVEIS.find(c => c.valor === categoria.cor)?.classe || 'bg-gray-500'}`}></div>
-                          <span className={`text-sm ${tema.texto}`}>
-                            {CORES_DISPONIVEIS.find(c => c.valor === categoria.cor)?.nome || 'Indefinida'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${tema.texto}`}>
-                          {formatarNumero(quantidadeProdutos)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          categoria.ativa 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {categoria.ativa ? 'Ativa' : 'Inativa'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${tema.textoSecundario}`}>
-                          {formatarData(categoria.dataCadastro)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => abrirModalDetalhes(categoria)}
-                            className="text-blue-600 hover:text-blue-700"
-                            title="Ver detalhes"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => abrirModal(categoria)}
-                            className="text-indigo-600 hover:text-indigo-700"
-                            title="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => alternarStatus(categoria)}
-                            className={categoria.ativa ? "text-yellow-600 hover:text-yellow-700" : "text-green-600 hover:text-green-700"}
-                            title={categoria.ativa ? "Desativar" : "Ativar"}
-                          >
-                            {categoria.ativa ? <X className="h-4 w-4" /> : <Tags className="h-4 w-4" />}
-                          </button>
-                          <button
-                            onClick={() => confirmarExclusao(categoria)}
-                            className="text-red-600 hover:text-red-700"
-                            title="Excluir"
-                            disabled={quantidadeProdutos > 0}
-                          >
-                            <Trash2 className={`h-4 w-4 ${quantidadeProdutos > 0 ? 'opacity-50' : ''}`} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        {/* Estatísticas */}
+        <EstatisticasCategorias />
 
-      {/* Estado vazio */}
-      {categoriasFiltradas.length === 0 && (
-        <div className="text-center py-12">
-          <Tags className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
-          <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
-            Nenhuma categoria encontrada
-          </h3>
-          <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
-            {categorias.length === 0 
-              ? 'Comece criando sua primeira categoria.'
-              : 'Tente ajustar os filtros de busca.'
-            }
-          </p>
-        </div>
-      )}
-
-      {/* Modal de Cadastro/Edição */}
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl max-w-2xl w-full`}>
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className={`text-xl font-semibold ${tema.texto}`}>
-                  {categoriaEditando ? 'Editar Categoria' : 'Nova Categoria'}
-                </h2>
-                <button
-                  onClick={fecharModal}
-                  className={`${tema.textoSecundario} hover:${tema.texto}`}
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.nome}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.nome ? 'border-red-500' : ''}`}
-                    placeholder="Nome da categoria"
-                    maxLength={50}
-                  />
-                  {formErrors.nome && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertTriangle className="h-4 w-4 mr-1" />
-                      {formErrors.nome}
-                    </p>
-                  )}
-                  <p className={`text-xs ${tema.textoSecundario} mt-1`}>
-                    {formData.nome.length}/50 caracteres
-                  </p>
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Descrição
-                  </label>
-                  <textarea
-                    value={formData.descricao}
-                    onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
-                    rows={3}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.descricao ? 'border-red-500' : ''}`}
-                    placeholder="Descrição da categoria (opcional)"
-                    maxLength={200}
-                  />
-                  {formErrors.descricao && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertTriangle className="h-4 w-4 mr-1" />
-                      {formErrors.descricao}
-                    </p>
-                  )}
-                  <p className={`text-xs ${tema.textoSecundario} mt-1`}>
-                    {formData.descricao.length}/200 caracteres
-                  </p>
-                </div>
-
-                <SeletorCor 
-                  corSelecionada={formData.cor}
-                  onCorChange={(cor) => setFormData(prev => ({ ...prev, cor }))}
-                  tema={tema}
+        {/* Filtros */}
+        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Buscar
+              </label>
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textoSecundario} h-4 w-4`} />
+                <input
+                  type="text"
+                  value={buscaTexto}
+                  onChange={(e) => setBuscaTexto(e.target.value)}
+                  placeholder="Nome ou descrição..."
+                  className={`w-full pl-10 pr-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
                 />
-
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="ativa"
-                    checked={formData.ativa}
-                    onChange={(e) => setFormData(prev => ({ ...prev, ativa: e.target.checked }))}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="ativa" className={`ml-2 text-sm ${tema.texto}`}>
-                    Categoria ativa
-                  </label>
-                </div>
               </div>
-
-              <div className="flex justify-end space-x-3 pt-6">
-                <button
-                  onClick={fecharModal}
-                  disabled={salvando}
-                  className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover} disabled:opacity-50`}
-                >
-                  <X className="mr-2 h-4 w-4 inline" />
-                  Cancelar
-                </button>
-                <button
-                  onClick={salvarCategoria}
-                  disabled={salvando}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center disabled:opacity-50"
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {salvando ? 'Salvando...' : (categoriaEditando ? 'Atualizar' : 'Salvar')}
-                </button>
+            </div>
+            
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Status
+              </label>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
+              >
+                <option value="todas">Todas</option>
+                <option value="ativa">Apenas Ativas</option>
+                <option value="inativa">Apenas Inativas</option>
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <div className={`text-sm ${tema.textoSecundario}`}>
+                {categoriasFiltradas.length} de {categorias.length} categorias
               </div>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Modal de Confirmação de Exclusão */}
-      {modalExclusaoAberto && categoriaParaExcluir && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl max-w-md w-full`}>
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className={`text-lg leading-6 font-medium ${tema.texto} mb-2`}>
-                  Excluir Categoria
+        {/* Lista/Grid de Categorias */}
+        {visualizacao === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {categoriasFiltradas.map(renderizarCategoriaGrid)}
+          </div>
+        ) : (
+          <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden table-responsive`}>
+            <div className="custom-scrollbar overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
+                  <tr>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Categoria
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Cor
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Produtos
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Status
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Data
+                    </th>
+                    {podeGerenciar && (
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Ações
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
+                  {categoriasFiltradas.map((categoria) => {
+                    const quantidadeProdutos = contarProdutosPorCategoria(categoria.nome);
+                    const corInfo = CORES_DISPONIVEIS.find(c => c.valor === categoria.cor);
+                    
+                    return (
+                      <tr key={categoria.id} className={`${tema.hover} table-hover-row`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium ${tema.texto}`}>
+                              {categoria.nome}
+                            </div>
+                            {categoria.descricao && (
+                              <div className={`text-sm ${tema.textoSecundario}`}>
+                                {categoria.descricao.length > 50 
+                                  ? `${categoria.descricao.substring(0, 50)}...`
+                                  : categoria.descricao
+                                }
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className={`w-6 h-6 rounded-full ${corInfo?.corFundo || 'bg-gray-500'} mr-2`}></div>
+                            <span className={`text-sm ${tema.texto}`}>
+                              {corInfo?.nome || 'Desconhecida'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm ${tema.texto}`}>
+                            {quantidadeProdutos} produto(s)
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            categoria.ativa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {categoria.ativa ? 'Ativa' : 'Inativa'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm ${tema.textoSecundario}`}>
+                            {formatarData(categoria.data_cadastro)}
+                          </div>
+                        </td>
+                        {podeGerenciar && (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={() => abrirModalDetalhes(categoria)}
+                                className="text-gray-600 hover:text-gray-700"
+                                title="Ver detalhes"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => abrirModal(categoria)}
+                                className="text-blue-600 hover:text-blue-700"
+                                title="Editar categoria"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => abrirModalExclusao(categoria)}
+                                className="text-red-600 hover:text-red-700"
+                                title="Excluir categoria"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {categoriasFiltradas.length === 0 && (
+              <div className="text-center py-12">
+                <Tag className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
+                <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
+                  Nenhuma categoria encontrada
                 </h3>
-                <p className={`text-sm ${tema.textoSecundario} mb-4`}>
-                  Tem certeza que deseja excluir a categoria "{categoriaParaExcluir.nome}"?
-                  Esta ação não pode ser desfeita.
+                <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
+                  {categorias.length === 0 
+                    ? 'Comece criando sua primeira categoria.'
+                    : 'Tente ajustar os filtros de busca.'
+                  }
                 </p>
               </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setModalExclusaoAberto(false)}
-                  className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={excluirCategoria}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                >
-                  Excluir
-                </button>
-              </div>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Modal de Detalhes */}
-      {modalDetalhesAberto && categoriaDetalhes && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl max-w-2xl w-full`}>
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className={`text-xl font-semibold ${tema.texto}`}>
-                  Detalhes da Categoria
-                </h2>
-                <button
-                  onClick={fecharModalDetalhes}
-                  className={`${tema.textoSecundario} hover:${tema.texto}`}
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
+        {/* Modal Categoria */}
+        {modalAberto && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModal()}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
+                    {categoriaEditando ? 'Editar Categoria' : 'Nova Categoria'}
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {/* Nome */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Nome *
+                      </label>
+                      <input
+                        type="text"
+                        value={formCategoria.nome}
+                        onChange={(e) => setFormCategoria(prev => ({ ...prev, nome: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.nome ? 'border-red-500' : tema.borda}`}
+                        placeholder="Nome da categoria"
+                        disabled={salvando}
+                      />
+                      {formErrors.nome && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
+                      )}
+                    </div>
 
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                      Nome
-                    </label>
-                    <p className={`text-lg font-medium ${tema.texto}`}>
-                      {categoriaDetalhes.nome}
-                    </p>
-                  </div>
+                    {/* Descrição */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Descrição
+                      </label>
+                      <textarea
+                        value={formCategoria.descricao}
+                        onChange={(e) => setFormCategoria(prev => ({ ...prev, descricao: e.target.value }))}
+                        rows={3}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        placeholder="Descrição da categoria..."
+                        disabled={salvando}
+                      />
+                    </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                      Status
-                    </label>
-                    <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-                      categoriaDetalhes.ativa 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {categoriaDetalhes.ativa ? 'Ativa' : 'Inativa'}
-                    </span>
-                  </div>
+                    {/* Cor */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                        Cor *
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {CORES_DISPONIVEIS.map(cor => (
+                          <button
+                            key={cor.valor}
+                            type="button"
+                            onClick={() => setFormCategoria(prev => ({ ...prev, cor: cor.valor }))}
+                            className={`
+                              relative w-12 h-12 rounded-lg ${cor.corFundo}
+                              border-2 ${formCategoria.cor === cor.valor 
+                                ? tema.fundo === 'bg-gray-900' 
+                                  ? 'border-white' 
+                                  : 'border-gray-800'
+                                : tema.fundo === 'bg-gray-900'
+                                ? 'border-gray-800' 
+                                : 'border-gray-300'}
+                              hover:scale-110 transition-all duration-200
+                            `}
+                            title={cor.nome}
+                            disabled={salvando}
+                          >
+                            {formCategoria.cor === cor.valor && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <p className={`text-xs ${tema.textoSecundario} mt-1`}>
+                        Cor selecionada: {CORES_DISPONIVEIS.find(c => c.valor === formCategoria.cor)?.nome}
+                      </p>
+                      {formErrors.cor && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.cor}</p>
+                      )}
+                    </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                      Cor
-                    </label>
-                    <div className="flex items-center">
-                      <div className={`w-6 h-6 rounded-full mr-3 ${CORES_DISPONIVEIS.find(c => c.valor === categoriaDetalhes.cor)?.classe || 'bg-gray-500'}`}></div>
-                      <span className={`text-sm ${tema.texto}`}>
-                        {CORES_DISPONIVEIS.find(c => c.valor === categoriaDetalhes.cor)?.nome || 'Indefinida'}
-                      </span>
+                    {/* Status */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Status
+                      </label>
+                      <select
+                        value={formCategoria.ativa ? 'ativa' : 'inativa'}
+                        onChange={(e) => setFormCategoria(prev => ({ ...prev, ativa: e.target.value === 'ativa' }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        disabled={salvando}
+                      >
+                        <option value="ativa">Ativa</option>
+                        <option value="inativa">Inativa</option>
+                      </select>
                     </div>
                   </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                      Produtos Ativos
-                    </label>
-                    <p className={`text-lg font-medium ${tema.texto}`}>
-                      {formatarNumero(contarProdutosPorCategoria(categoriaDetalhes.nome))}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-1`}>
-                      Data de Cadastro
-                    </label>
-                    <p className={`text-sm ${tema.texto}`}>
-                      {formatarData(categoriaDetalhes.dataCadastro)}
-                    </p>
+                  
+                  <div className="flex justify-end space-x-3 pt-6">
+                    <button
+                      onClick={fecharModal}
+                      disabled={salvando}
+                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover} disabled:opacity-50`}
+                    >
+                      <X className="mr-2 h-4 w-4 inline" />
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={salvarCategoria}
+                      disabled={salvando}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                    >
+                      {salvando ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          {categoriaEditando ? 'Atualizar' : 'Criar'}
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
-
-                {categoriaDetalhes.descricao && (
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.textoSecundario} mb-2`}>
-                      Descrição
-                    </label>
-                    <p className={`text-sm ${tema.texto} ${tema.papel} p-3 rounded-lg border ${tema.borda}`}>
-                      {categoriaDetalhes.descricao}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-6">
-                <button
-                  onClick={fecharModalDetalhes}
-                  className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
-                >
-                  <X className="mr-2 h-4 w-4 inline" />
-                  Fechar
-                </button>
-                <button
-                  onClick={() => {
-                    fecharModalDetalhes();
-                    abrirModal(categoriaDetalhes);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-                >
-                  <Edit className="mr-2 h-4 w-4" />
-                  Editar
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Modal de Detalhes */}
+        {modalDetalhesAberto && categoriaDetalhes && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalDetalhes}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 className={`text-lg font-medium ${tema.texto} mb-4 flex items-center`}>
+                    <Eye className="mr-2 h-5 w-5" />
+                    Detalhes da Categoria
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Nome:</span>
+                        <p className={`text-lg font-medium ${tema.texto}`}>{categoriaDetalhes.nome}</p>
+                      </div>
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Status:</span>
+                        <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          categoriaDetalhes.ativa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {categoriaDetalhes.ativa ? 'Ativa' : 'Inativa'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Cor:</span>
+                        <div className="flex items-center mt-1">
+                          <div className={`w-6 h-6 rounded-full ${CORES_DISPONIVEIS.find(c => c.valor === categoriaDetalhes.cor)?.corFundo || 'bg-gray-500'} mr-2`}></div>
+                          <span className={`text-sm ${tema.texto}`}>
+                            {CORES_DISPONIVEIS.find(c => c.valor === categoriaDetalhes.cor)?.nome || 'Desconhecida'}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Produtos:</span>
+                        <p className={`text-lg font-medium ${tema.texto}`}>
+                          {contarProdutosPorCategoria(categoriaDetalhes.nome)} produto(s)
+                        </p>
+                      </div>
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Criada em:</span>
+                        <p className={`text-sm ${tema.texto}`}>
+                          {formatarData(categoriaDetalhes.data_cadastro)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {categoriaDetalhes.descricao && (
+                      <div>
+                        <span className={`text-sm font-medium ${tema.textoSecundario}`}>Descrição:</span>
+                        <p className={`text-sm ${tema.texto} mt-1 p-3 ${tema.papel} rounded-lg border ${tema.borda}`}>
+                          {categoriaDetalhes.descricao}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end space-x-3 pt-6">
+                    <button
+                      onClick={fecharModalDetalhes}
+                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
+                    >
+                      <X className="mr-2 h-4 w-4 inline" />
+                      Fechar
+                    </button>
+                    {podeGerenciar && (
+                      <button
+                        onClick={() => {
+                          fecharModalDetalhes();
+                          abrirModal(categoriaDetalhes);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Confirmação de Exclusão */}
+        {modalExclusaoAberto && categoriaParaExcluir && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModalExclusao()}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="sm:flex sm:items-start">
+                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                      <AlertTriangle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
+                        Confirmar Exclusão
+                      </h3>
+                      <div className="mt-2">
+                        <p className={`text-sm ${tema.textoSecundario}`}>
+                          Tem certeza que deseja excluir a categoria <strong>{categoriaParaExcluir.nome}</strong>? 
+                          Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    onClick={confirmarExclusao}
+                    disabled={salvando}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  >
+                    {salvando ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Excluindo...
+                      </>
+                    ) : (
+                      'Excluir'
+                    )}
+                  </button>
+                  <button
+                    onClick={fecharModalExclusao}
+                    disabled={salvando}
+                    className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50`}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

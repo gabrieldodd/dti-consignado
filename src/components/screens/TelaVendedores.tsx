@@ -1,5 +1,5 @@
 // src/components/screens/TelaVendedores.tsx
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { 
   Users, 
   Plus, 
@@ -7,514 +7,566 @@ import {
   Edit, 
   Trash2, 
   Eye, 
-  EyeOff, 
-  X, 
-  Save,
+  EyeOff,
   AlertTriangle,
+  CheckCircle,
+  X,
+  Save,
+  UserCheck,
+  UserX,
   Mail,
   Phone,
-  User,
-  Lock,
   Calendar
 } from 'lucide-react';
+
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
+
+// Interfaces
+interface Vendedor {
+  id: number;
+  nome: string;
+  email: string;
+  telefone: string;
+  status: string;
+  login: string;
+  senha: string;
+  data_cadastro: string;
+}
 
 interface VendedorForm {
   nome: string;
   email: string;
   telefone: string;
+  status: string;
   login: string;
   senha: string;
-  confirmarSenha: string;
-  status: string;
 }
 
+// Form inicial
 const FORM_INICIAL: VendedorForm = {
   nome: '',
   email: '',
   telefone: '',
+  status: 'Ativo',
   login: '',
-  senha: '',
-  confirmarSenha: '',
-  status: 'Ativo'
+  senha: ''
 };
 
+// Componente de estatísticas
+const EstatisticasVendedores = memo(() => {
+  const { tema, vendedores } = useAppContext();
+  
+  const estatisticas = useMemo(() => {
+    const ativos = vendedores.filter(v => v.status === 'Ativo').length;
+    const inativos = vendedores.filter(v => v.status === 'Inativo').length;
+    const total = vendedores.length;
+    
+    return { ativos, inativos, total };
+  }, [vendedores]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
+            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.total}</p>
+          </div>
+          <Users className="h-8 w-8 text-blue-600" />
+        </div>
+      </div>
+
+      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
+            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.ativos}</p>
+          </div>
+          <UserCheck className="h-8 w-8 text-green-600" />
+        </div>
+      </div>
+
+      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm ${tema.textoSecundario}`}>Inativos</p>
+            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.inativos}</p>
+          </div>
+          <UserX className="h-8 w-8 text-red-600" />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Componente principal
 export const TelaVendedores: React.FC = () => {
   // Context e Hooks
   const { 
     tema, 
-    vendedores, 
-    setVendedores, 
+    vendedores,
     mostrarMensagem,
-    tipoUsuario 
+    cookies,
+    tipoUsuario,
+    adicionarVendedor,
+    atualizarVendedor,
+    excluirVendedor,
+    loadingVendedores,
+    errorVendedores
   } = useAppContext();
   
-  const { formatarTelefone, formatarData } = useFormatters();
+  const { formatarTelefone } = useFormatters();
   const { validarEmail, validarTelefone } = useValidation();
 
-  // Estados Locais
+  // Loading e Erro
+  if (loadingVendedores) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando vendedores...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorVendedores) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar vendedores</p>
+          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorVendedores}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Estados
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [vendedorEditando, setVendedorEditando] = useState<any>(null);
-  const [vendedorParaExcluir, setVendedorParaExcluir] = useState<any>(null);
-  const [formData, setFormData] = useState<VendedorForm>(FORM_INICIAL);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [vendedorEditando, setVendedorEditando] = useState<Vendedor | null>(null);
+  const [vendedorParaExcluir, setVendedorParaExcluir] = useState<Vendedor | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
-
-  // Filtros e Busca
+  
+  // Filtros
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusVendedores') || 'todos';
+  });
   const [buscaTexto, setBuscaTexto] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState('todos');
 
-  // Dados filtrados
+  // Estados do formulário
+  const [formVendedor, setFormVendedor] = useState<VendedorForm>(FORM_INICIAL);
+  const [formErrors, setFormErrors] = useState<any>({});
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+
+  // Salvar filtros nos cookies
+  useEffect(() => {
+    cookies.setCookie('filtroStatusVendedores', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
+
+  // Filtrar vendedores
   const vendedoresFiltrados = useMemo(() => {
-    return vendedores.filter(vendedor => {
-      const matchBusca = !buscaTexto || 
-        vendedor.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        vendedor.login.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        (vendedor.email && vendedor.email.toLowerCase().includes(buscaTexto.toLowerCase()));
-      
-      const matchStatus = filtroStatus === 'todos' || 
-        vendedor.status.toLowerCase() === filtroStatus.toLowerCase();
-      
-      return matchBusca && matchStatus;
-    });
-  }, [vendedores, buscaTexto, filtroStatus]);
+    let resultado = vendedores;
 
-  // Validar formulário
+    if (filtroStatus !== 'todos') {
+      const statusFiltro = filtroStatus === 'ativo' ? 'Ativo' : 'Inativo';
+      resultado = resultado.filter(v => v.status === statusFiltro);
+    }
+
+    if (buscaTexto) {
+      resultado = resultado.filter(v => 
+        v.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        v.email.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        v.login.toLowerCase().includes(buscaTexto.toLowerCase())
+      );
+    }
+
+    return resultado;
+  }, [vendedores, filtroStatus, buscaTexto]);
+
+  // Handlers modais
+  const abrirModal = useCallback((vendedor?: Vendedor) => {
+    if (vendedor) {
+      setVendedorEditando(vendedor);
+      setFormVendedor({
+        nome: vendedor.nome,
+        email: vendedor.email,
+        telefone: vendedor.telefone,
+        status: vendedor.status,
+        login: vendedor.login,
+        senha: vendedor.senha
+      });
+    } else {
+      setVendedorEditando(null);
+      setFormVendedor(FORM_INICIAL);
+    }
+    setFormErrors({});
+    setMostrarSenha(false);
+    setModalAberto(true);
+  }, []);
+
+  const fecharModal = useCallback(() => {
+    setModalAberto(false);
+    setVendedorEditando(null);
+    setFormVendedor(FORM_INICIAL);
+    setFormErrors({});
+    setMostrarSenha(false);
+  }, []);
+
+  const abrirModalExclusao = useCallback((vendedor: Vendedor) => {
+    setVendedorParaExcluir(vendedor);
+    setModalExclusaoAberto(true);
+  }, []);
+
+  const fecharModalExclusao = useCallback(() => {
+    setModalExclusaoAberto(false);
+    setVendedorParaExcluir(null);
+  }, []);
+
+  // Validação do formulário
   const validarFormulario = useCallback(() => {
-    const errors: Record<string, string> = {};
+    const errors: any = {};
 
-    if (!formData.nome.trim()) {
+    if (!formVendedor.nome.trim()) {
       errors.nome = 'Nome é obrigatório';
     }
 
-    // Email opcional, mas se preenchido deve ser válido
-    if (formData.email.trim() && !validarEmail(formData.email)) {
+    if (!formVendedor.email.trim()) {
+      errors.email = 'Email é obrigatório';
+    } else if (!validarEmail(formVendedor.email)) {
       errors.email = 'Email inválido';
     }
 
-    // Telefone opcional, mas se preenchido deve ser válido
-    if (formData.telefone.trim() && !validarTelefone(formData.telefone)) {
-      errors.telefone = 'Telefone inválido';
+    if (!formVendedor.telefone.trim()) {
+      errors.telefone = 'Telefone é obrigatório';
     }
 
-    if (!formData.login.trim()) {
+    if (!formVendedor.login.trim()) {
       errors.login = 'Login é obrigatório';
-    } else if (formData.login.length < 3) {
+    } else if (formVendedor.login.length < 3) {
       errors.login = 'Login deve ter pelo menos 3 caracteres';
     }
 
-    if (!vendedorEditando) {
-      if (!formData.senha.trim()) {
-        errors.senha = 'Senha é obrigatória';
-      } else if (formData.senha.length < 6) {
-        errors.senha = 'Senha deve ter pelo menos 6 caracteres';
-      }
-
-      if (formData.senha !== formData.confirmarSenha) {
-        errors.confirmarSenha = 'Senhas não conferem';
-      }
+    if (!formVendedor.senha.trim()) {
+      errors.senha = 'Senha é obrigatória';
+    } else if (formVendedor.senha.length < 6) {
+      errors.senha = 'Senha deve ter pelo menos 6 caracteres';
     }
 
-    // Verificar se login já existe
-    const loginExiste = vendedores.some(v => 
-      v.login === formData.login && 
-      (!vendedorEditando || v.id !== vendedorEditando.id)
-    );
-    if (loginExiste) {
-      errors.login = 'Login já existe';
-    }
-
-    // Verificar se email já existe (apenas se preenchido)
-    if (formData.email.trim()) {
+    // Verificar duplicatas (apenas para novos vendedores ou mudança de email/login)
+    if (!vendedorEditando || formVendedor.email !== vendedorEditando.email) {
       const emailExiste = vendedores.some(v => 
-        v.email === formData.email && 
-        (!vendedorEditando || v.id !== vendedorEditando.id)
+        v.email === formVendedor.email && v.id !== vendedorEditando?.id
       );
       if (emailExiste) {
-        errors.email = 'Email já cadastrado';
+        errors.email = 'Este email já está em uso';
+      }
+    }
+
+    if (!vendedorEditando || formVendedor.login !== vendedorEditando.login) {
+      const loginExiste = vendedores.some(v => 
+        v.login === formVendedor.login && v.id !== vendedorEditando?.id
+      );
+      if (loginExiste) {
+        errors.login = 'Este login já está em uso';
       }
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData, vendedores, vendedorEditando, validarEmail, validarTelefone]);
-
-  // Abrir modal
-  const abrirModal = useCallback((vendedor?: any) => {
-    setVendedorEditando(vendedor || null);
-    setFormData(vendedor ? {
-      nome: vendedor.nome,
-      email: vendedor.email || '',
-      telefone: vendedor.telefone || '',
-      login: vendedor.login,
-      senha: '',
-      confirmarSenha: '',
-      status: vendedor.status
-    } : FORM_INICIAL);
-    setFormErrors({});
-    setMostrarSenha(false);
-    setMostrarConfirmarSenha(false);
-    setModalAberto(true);
-  }, []);
-
-  // Fechar modal
-  const fecharModal = useCallback(() => {
-    setModalAberto(false);
-    setVendedorEditando(null);
-    setFormData(FORM_INICIAL);
-    setFormErrors({});
-  }, []);
+  }, [formVendedor, vendedorEditando, vendedores, validarEmail]);
 
   // Salvar vendedor
   const salvarVendedor = useCallback(async () => {
     if (!validarFormulario()) return;
 
     setSalvando(true);
+    
     try {
       if (vendedorEditando) {
-        // Editar
-        const vendedorAtualizado = {
-          ...vendedorEditando,
-          nome: formData.nome.trim(),
-          email: formData.email.trim() || '',
-          telefone: formData.telefone.trim() || '',
-          login: formData.login.trim(),
-          status: formData.status,
-          ...(formData.senha && { senha: formData.senha })
-        };
-
-        setVendedores(prev => prev.map(v => 
-          v.id === vendedorEditando.id ? vendedorAtualizado : v
-        ));
-        mostrarMensagem('success', 'Vendedor atualizado com sucesso!');
+        // Atualizar vendedor existente
+        const resultado = await atualizarVendedor(vendedorEditando.id, formVendedor);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Vendedor atualizado com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao atualizar vendedor');
+        }
       } else {
-        // Criar
-        const novoVendedor = {
-          id: Math.max(...vendedores.map(v => v.id), 0) + 1,
-          nome: formData.nome.trim(),
-          email: formData.email.trim() || '',
-          telefone: formData.telefone.trim() || '',
-          login: formData.login.trim(),
-          senha: formData.senha,
-          status: formData.status,
-          dataCadastro: new Date().toISOString().split('T')[0]
-        };
-
-        setVendedores(prev => [...prev, novoVendedor]);
-        mostrarMensagem('success', 'Vendedor criado com sucesso!');
+        // Criar novo vendedor
+        const resultado = await adicionarVendedor(formVendedor);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Vendedor criado com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao criar vendedor');
+        }
       }
-
-      fecharModal();
     } catch (error) {
       mostrarMensagem('error', 'Erro ao salvar vendedor');
     } finally {
       setSalvando(false);
     }
-  }, [formData, vendedorEditando, vendedores, setVendedores, mostrarMensagem, validarFormulario, fecharModal]);
+  }, [formVendedor, vendedorEditando, validarFormulario, adicionarVendedor, atualizarVendedor, mostrarMensagem, fecharModal]);
 
   // Confirmar exclusão
-  const confirmarExclusao = useCallback((vendedor: any) => {
-    setVendedorParaExcluir(vendedor);
-    setModalExclusaoAberto(true);
-  }, []);
-
-  // Excluir vendedor
-  const excluirVendedor = useCallback(async () => {
+  const confirmarExclusao = useCallback(async () => {
     if (!vendedorParaExcluir) return;
 
     setSalvando(true);
+    
     try {
-      setVendedores(prev => prev.filter(v => v.id !== vendedorParaExcluir.id));
-      mostrarMensagem('success', 'Vendedor excluído com sucesso!');
-      setModalExclusaoAberto(false);
-      setVendedorParaExcluir(null);
+      const resultado = await excluirVendedor(vendedorParaExcluir.id);
+      if (resultado.success) {
+        mostrarMensagem('success', `Vendedor "${vendedorParaExcluir.nome}" excluído com sucesso!`);
+        fecharModalExclusao();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao excluir vendedor');
+      }
     } catch (error) {
       mostrarMensagem('error', 'Erro ao excluir vendedor');
     } finally {
       setSalvando(false);
     }
-  }, [vendedorParaExcluir, setVendedores, mostrarMensagem]);
+  }, [vendedorParaExcluir, excluirVendedor, mostrarMensagem, fecharModalExclusao]);
 
   // Verificar permissões
   const podeGerenciar = tipoUsuario === 'admin';
 
+  if (!podeGerenciar) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium`}>Acesso Negado</p>
+          <p className={`${tema.textoSecundario} text-sm`}>
+            Apenas administradores podem gerenciar vendedores
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`p-6 ${tema.fundo} min-h-screen`}>
-      <div className="max-w-7xl mx-auto">
+    <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
+      <div className="container mx-auto px-4 py-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className={`text-3xl font-bold ${tema.texto}`}>Vendedores</h1>
-            <p className={`mt-2 ${tema.textoSecundario}`}>
+            <h1 className={`text-2xl font-bold ${tema.texto} flex items-center`}>
+              <Users className="mr-3 h-6 w-6" />
+              Vendedores
+            </h1>
+            <p className={`text-sm ${tema.textoSecundario}`}>
               Gerencie os vendedores do sistema
             </p>
           </div>
-          {podeGerenciar && (
-            <button
-              onClick={() => abrirModal()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors duration-200"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Vendedor
-            </button>
-          )}
+          
+          <button
+            onClick={() => abrirModal()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Vendedor
+          </button>
         </div>
 
+        {/* Estatísticas */}
+        <EstatisticasVendedores />
+
         {/* Filtros */}
-        <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
+        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text"
-                placeholder="Buscar por nome ou login..."
-                value={buscaTexto}
-                onChange={(e) => setBuscaTexto(e.target.value)}
-                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-              />
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Buscar
+              </label>
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textoSecundario} h-4 w-4`} />
+                <input
+                  type="text"
+                  value={buscaTexto}
+                  onChange={(e) => setBuscaTexto(e.target.value)}
+                  placeholder="Nome, email ou login..."
+                  className={`w-full pl-10 pr-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
+                />
+              </div>
             </div>
             
-            <select
-              value={filtroStatus}
-              onChange={(e) => setFiltroStatus(e.target.value)}
-              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todos">Todos os Status</option>
-              <option value="ativo">Ativos</option>
-              <option value="inativo">Inativos</option>
-            </select>
-
-            <div className={`flex items-center ${tema.textoSecundario}`}>
-              <span className="text-sm">
-                {vendedoresFiltrados.length} vendedor(es) encontrado(s)
-              </span>
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Status
+              </label>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
+              >
+                <option value="todos">Todos</option>
+                <option value="ativo">Apenas Ativos</option>
+                <option value="inativo">Apenas Inativos</option>
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <div className={`text-sm ${tema.textoSecundario}`}>
+                {vendedoresFiltrados.length} de {vendedores.length} vendedores
+              </div>
             </div>
           </div>
         </div>
 
         {/* Lista de Vendedores */}
-        <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} overflow-hidden`}>
-          {vendedoresFiltrados.length === 0 ? (
-            <div className="p-8 text-center">
-              <Users className={`mx-auto h-12 w-12 ${tema.textoSecundario} mb-4`} />
-              <h3 className={`text-lg font-medium ${tema.texto} mb-2`}>
-                Nenhum vendedor encontrado
-              </h3>
-              <p className={tema.textoSecundario}>
-                {buscaTexto || filtroStatus !== 'todos' 
-                  ? 'Tente ajustar os filtros de busca' 
-                  : 'Comece criando um novo vendedor'
-                }
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Desktop - Tabela */}
-              <div className="hidden md:block">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className={tema.fundo}>
-                    <tr>
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Vendedor
-                      </th>
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Contato
-                      </th>
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Login
-                      </th>
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Status
-                      </th>
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Cadastro
-                      </th>
-                      {podeGerenciar && (
-                        <th className={`px-6 py-3 text-right text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                          Ações
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-                    {vendedoresFiltrados.map((vendedor) => (
-                      <tr key={vendedor.id} className={`${tema.hover}`}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-8 w-8">
-                              <div className={`h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center`}>
-                                <User className="h-4 w-4 text-blue-600" />
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className={`text-sm font-medium ${tema.texto}`}>
-                                {vendedor.nome}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm ${tema.texto}`}>
-                            {vendedor.email || <span className={tema.textoSecundario}>-</span>}
-                          </div>
-                          <div className={`text-sm ${tema.textoSecundario}`}>
-                            {vendedor.telefone ? formatarTelefone(vendedor.telefone) : '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm ${tema.texto}`}>{vendedor.login}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            vendedor.status === 'Ativo' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {vendedor.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm ${tema.textoSecundario}`}>
-                            {formatarData(vendedor.dataCadastro)}
-                          </div>
-                        </td>
-                        {podeGerenciar && (
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end space-x-2">
-                              <button
-                                onClick={() => abrirModal(vendedor)}
-                                className="text-indigo-600 hover:text-indigo-900 p-1 rounded"
-                                title="Editar"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => confirmarExclusao(vendedor)}
-                                className="text-red-600 hover:text-red-900 p-1 rounded"
-                                title="Excluir"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile - Cards */}
-              <div className="md:hidden p-4 space-y-4">
+        <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden table-responsive`}>
+          <div className="custom-scrollbar overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
+              <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
+                <tr>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Vendedor
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Contato
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Login
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Status
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Cadastro
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
                 {vendedoresFiltrados.map((vendedor) => (
-                  <div key={vendedor.id} className={`border ${tema.borda} rounded-lg p-4`}>
-                    <div className="flex items-center justify-between mb-3">
+                  <tr key={vendedor.id} className={`${tema.hover} table-hover-row`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className={`h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3`}>
-                          <User className="h-4 w-4 text-blue-600" />
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className={`h-10 w-10 rounded-full ${vendedor.status === 'Ativo' ? 'bg-green-100' : 'bg-gray-100'} flex items-center justify-center`}>
+                            <span className={`text-sm font-medium ${vendedor.status === 'Ativo' ? 'text-green-600' : 'text-gray-600'}`}>
+                              {vendedor.nome.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
                         </div>
-                        <h3 className={`font-medium ${tema.texto}`}>{vendedor.nome}</h3>
+                        <div className="ml-4">
+                          <div className={`text-sm font-medium ${tema.texto}`}>
+                            {vendedor.nome}
+                          </div>
+                        </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm ${tema.texto}`}>
+                        <div className="flex items-center">
+                          <Mail className="h-4 w-4 mr-1" />
+                          {vendedor.email}
+                        </div>
+                        <div className={`flex items-center mt-1 ${tema.textoSecundario}`}>
+                          <Phone className="h-4 w-4 mr-1" />
+                          {vendedor.telefone}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm font-mono ${tema.texto}`}>
+                        {vendedor.login}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         vendedor.status === 'Ativo' 
-                          ? 'bg-green-100 text-green-800' 
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {vendedor.status}
                       </span>
-                    </div>
-                    
-                    <div className="space-y-2 mb-4">
-                      {vendedor.email && (
-                        <div className="flex items-center">
-                          <Mail className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                          <span className={`text-sm ${tema.texto}`}>{vendedor.email}</span>
-                        </div>
-                      )}
-                      {vendedor.telefone && (
-                        <div className="flex items-center">
-                          <Phone className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                          <span className={`text-sm ${tema.texto}`}>
-                            {formatarTelefone(vendedor.telefone)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center">
-                        <User className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                        <span className={`text-sm ${tema.texto}`}>{vendedor.login}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm ${tema.textoSecundario} flex items-center`}>
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {new Date(vendedor.data_cadastro).toLocaleDateString('pt-BR')}
                       </div>
-                      <div className="flex items-center">
-                        <Calendar className={`h-4 w-4 ${tema.textoSecundario} mr-2`} />
-                        <span className={`text-sm ${tema.textoSecundario}`}>
-                          Cadastrado em {formatarData(vendedor.dataCadastro)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {podeGerenciar && (
-                      <div className="flex justify-end space-x-2 pt-3 border-t border-gray-200">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => abrirModal(vendedor)}
-                          className="flex items-center px-3 py-2 text-sm text-indigo-600 hover:text-indigo-900"
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Editar vendedor"
                         >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Editar
+                          <Edit className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => confirmarExclusao(vendedor)}
-                          className="flex items-center px-3 py-2 text-sm text-red-600 hover:text-red-900"
+                          onClick={() => abrirModalExclusao(vendedor)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Excluir vendedor"
                         >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Excluir
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                    )}
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </>
+              </tbody>
+            </table>
+          </div>
+
+          {vendedoresFiltrados.length === 0 && (
+            <div className="text-center py-12">
+              <Users className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
+              <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
+                Nenhum vendedor encontrado
+              </h3>
+              <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
+                {vendedores.length === 0 
+                  ? 'Comece criando seu primeiro vendedor.'
+                  : 'Tente ajustar os filtros de busca.'
+                }
+              </p>
+            </div>
           )}
         </div>
 
-        {/* Modal de Formulário */}
+        {/* Modal Vendedor */}
         {modalAberto && (
-          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModal}></div>
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModal()}></div>
               
-              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6`}>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className={`text-lg font-medium ${tema.texto}`}>
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
                     {vendedorEditando ? 'Editar Vendedor' : 'Novo Vendedor'}
                   </h3>
-                  <button
-                    onClick={fecharModal}
-                    className={`p-2 rounded-md ${tema.hover} ${tema.texto}`}
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={(e) => { e.preventDefault(); salvarVendedor(); }}>
+                  
                   <div className="space-y-4">
                     {/* Nome */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
                         Nome *
                       </label>
                       <input
                         type="text"
-                        value={formData.nome}
-                        onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.nome ? 'border-red-500' : ''}`}
-                        placeholder="Digite o nome completo"
+                        value={formVendedor.nome}
+                        onChange={(e) => setFormVendedor(prev => ({ ...prev, nome: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.nome ? 'border-red-500' : tema.borda}`}
+                        placeholder="Nome completo"
+                        disabled={salvando}
                       />
                       {formErrors.nome && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
@@ -523,15 +575,16 @@ export const TelaVendedores: React.FC = () => {
 
                     {/* Email */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Email
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Email *
                       </label>
                       <input
                         type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.email ? 'border-red-500' : ''}`}
-                        placeholder="email@exemplo.com (opcional)"
+                        value={formVendedor.email}
+                        onChange={(e) => setFormVendedor(prev => ({ ...prev, email: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.email ? 'border-red-500' : tema.borda}`}
+                        placeholder="email@exemplo.com"
+                        disabled={salvando}
                       />
                       {formErrors.email && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
@@ -540,15 +593,19 @@ export const TelaVendedores: React.FC = () => {
 
                     {/* Telefone */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Telefone
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Telefone *
                       </label>
                       <input
-                        type="tel"
-                        value={formData.telefone}
-                        onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.telefone ? 'border-red-500' : ''}`}
-                        placeholder="(11) 99999-9999 (opcional)"
+                        type="text"
+                        value={formVendedor.telefone}
+                        onChange={(e) => setFormVendedor(prev => ({ 
+                          ...prev, 
+                          telefone: formatarTelefone(e.target.value)
+                        }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.telefone ? 'border-red-500' : tema.borda}`}
+                        placeholder="(00) 00000-0000"
+                        disabled={salvando}
                       />
                       {formErrors.telefone && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.telefone}</p>
@@ -557,15 +614,16 @@ export const TelaVendedores: React.FC = () => {
 
                     {/* Login */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
                         Login *
                       </label>
                       <input
                         type="text"
-                        value={formData.login}
-                        onChange={(e) => setFormData(prev => ({ ...prev, login: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.login ? 'border-red-500' : ''}`}
-                        placeholder="Digite o nome de usuário"
+                        value={formVendedor.login}
+                        onChange={(e) => setFormVendedor(prev => ({ ...prev, login: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.login ? 'border-red-500' : tema.borda}`}
+                        placeholder="login_usuario"
+                        disabled={salvando}
                       />
                       {formErrors.login && (
                         <p className="mt-1 text-sm text-red-600">{formErrors.login}</p>
@@ -574,27 +632,25 @@ export const TelaVendedores: React.FC = () => {
 
                     {/* Senha */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        {vendedorEditando ? 'Nova Senha (deixe vazio para manter)' : 'Senha *'}
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Senha *
                       </label>
                       <div className="relative">
                         <input
                           type={mostrarSenha ? 'text' : 'password'}
-                          value={formData.senha}
-                          onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
-                          className={`w-full px-3 py-2 pr-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.senha ? 'border-red-500' : ''}`}
-                          placeholder="Digite a senha"
+                          value={formVendedor.senha}
+                          onChange={(e) => setFormVendedor(prev => ({ ...prev, senha: e.target.value }))}
+                          className={`mt-1 block w-full border rounded-md px-3 py-2 pr-10 ${tema.input} ${formErrors.senha ? 'border-red-500' : tema.borda}`}
+                          placeholder="••••••••"
+                          disabled={salvando}
                         />
                         <button
                           type="button"
                           onClick={() => setMostrarSenha(!mostrarSenha)}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                          className={`absolute inset-y-0 right-0 pr-3 flex items-center ${tema.textoSecundario} hover:${tema.texto}`}
+                          disabled={salvando}
                         >
-                          {mostrarSenha ? (
-                            <EyeOff className="h-4 w-4 text-gray-400" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-gray-400" />
-                          )}
+                          {mostrarSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       {formErrors.senha && (
@@ -602,66 +658,36 @@ export const TelaVendedores: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Confirmar Senha */}
-                    {!vendedorEditando && (
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                          Confirmar Senha *
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={mostrarConfirmarSenha ? 'text' : 'password'}
-                            value={formData.confirmarSenha}
-                            onChange={(e) => setFormData(prev => ({ ...prev, confirmarSenha: e.target.value }))}
-                            className={`w-full px-3 py-2 pr-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input} ${formErrors.confirmarSenha ? 'border-red-500' : ''}`}
-                            placeholder="Confirme a senha"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}
-                            className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                          >
-                            {mostrarConfirmarSenha ? (
-                              <EyeOff className="h-4 w-4 text-gray-400" />
-                            ) : (
-                              <Eye className="h-4 w-4 text-gray-400" />
-                            )}
-                          </button>
-                        </div>
-                        {formErrors.confirmarSenha && (
-                          <p className="mt-1 text-sm text-red-600">{formErrors.confirmarSenha}</p>
-                        )}
-                      </div>
-                    )}
-
                     {/* Status */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
                         Status
                       </label>
                       <select
-                        value={formData.status}
-                        onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+                        value={formVendedor.status}
+                        onChange={(e) => setFormVendedor(prev => ({ ...prev, status: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        disabled={salvando}
                       >
                         <option value="Ativo">Ativo</option>
                         <option value="Inativo">Inativo</option>
                       </select>
                     </div>
                   </div>
-
-                  <div className="mt-6 flex justify-end space-x-3">
+                  
+                  <div className="flex justify-end space-x-3 pt-6">
                     <button
-                      type="button"
                       onClick={fecharModal}
-                      className={`px-4 py-2 border ${tema.borda} rounded-md text-sm font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                      disabled={salvando}
+                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover} disabled:opacity-50`}
                     >
+                      <X className="mr-2 h-4 w-4 inline" />
                       Cancelar
                     </button>
                     <button
-                      type="submit"
+                      onClick={salvarVendedor}
                       disabled={salvando}
-                      className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
                     >
                       {salvando ? (
                         <>
@@ -676,56 +702,56 @@ export const TelaVendedores: React.FC = () => {
                       )}
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Modal de Confirmação de Exclusão */}
-        {modalExclusaoAberto && (
-          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        {modalExclusaoAberto && vendedorParaExcluir && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModalExclusao()}></div>
               
-              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6`}>
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <AlertTriangle className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
-                      Confirmar Exclusão
-                    </h3>
-                    <div className="mt-2">
-                      <p className={`text-sm ${tema.textoSecundario}`}>
-                        Tem certeza que deseja excluir o vendedor{' '}
-                        <span className="font-semibold">{vendedorParaExcluir?.nome}</span>?
-                      </p>
-                      <p className={`text-sm ${tema.textoSecundario} mt-1`}>
-                        Esta ação não pode ser desfeita.
-                      </p>
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="sm:flex sm:items-start">
+                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                      <AlertTriangle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
+                        Confirmar Exclusão
+                      </h3>
+                      <div className="mt-2">
+                        <p className={`text-sm ${tema.textoSecundario}`}>
+                          Tem certeza que deseja excluir o vendedor <strong>{vendedorParaExcluir.nome}</strong>? 
+                          Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <div className="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                   <button
-                    type="button"
-                    onClick={excluirVendedor}
+                    onClick={confirmarExclusao}
                     disabled={salvando}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
-                    {salvando ? 'Excluindo...' : 'Excluir'}
+                    {salvando ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Excluindo...
+                      </>
+                    ) : (
+                      'Excluir'
+                    )}
                   </button>
                   <button
-                    type="button"
-                    onClick={() => {
-                      setModalExclusaoAberto(false);
-                      setVendedorParaExcluir(null);
-                    }}
-                    className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm`}
+                    onClick={fecharModalExclusao}
+                    disabled={salvando}
+                    className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50`}
                   >
                     Cancelar
                   </button>

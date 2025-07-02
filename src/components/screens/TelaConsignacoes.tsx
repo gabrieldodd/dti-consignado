@@ -38,51 +38,43 @@ interface Vendedor {
   status: string;
   login: string;
   senha: string;
-  dataCadastro: string;
+  data_cadastro: string;
 }
 
 interface Produto {
   id: number;
   nome: string;
   descricao: string;
-  codigoBarras: string;
+  codigo_barras: string;
   categoria: string;
-  valorCusto: number;
-  valorVenda: number;
+  valor_custo: number;
+  valor_venda: number;
   estoque: number;
-  estoqueMinimo: number;
+  estoque_minimo: number;
   ativo: boolean;
-  dataCadastro: string;
-}
-
-interface ProdutoConsignacao {
-  produto: Produto;
-  quantidade: number;
-  valorUnitario: number;
-  valorTotal: number;
+  data_cadastro: string;
 }
 
 interface Consignacao {
   id: number;
-  clienteNome: string;
-  clienteDocumento: string;
-  clienteTelefone: string;
-  tipoDocumento: 'cpf' | 'cnpj';
-  vendedorId: number;
-  vendedor: Vendedor;
-  quantidadeTotal: number;
-  valorTotal: number;
-  dataConsignacao: string;
-  dataRetorno?: string;
+  cliente_nome: string;
+  cliente_documento: string;
+  cliente_telefone: string;
+  tipo_documento: 'cpf' | 'cnpj';
+  vendedor_id: number;
+  vendedor?: Vendedor;
+  quantidade_total: number;
+  valor_total: number;
+  data_consignacao: string;
+  data_retorno?: string;
   status: 'ativa' | 'finalizada' | 'cancelada';
   observacoes?: string;
-  produtos?: ProdutoConsignacao[];
   retorno?: {
-    quantidadeRetornada: number;
-    valorRetornado: number;
-    quantidadeVendida: number;
-    valorDevido: number;
-  };
+    quantidade_retornada: number;
+    valor_retornado: number;
+    quantidade_vendida: number;
+    valor_devido: number;
+  }[];
 }
 
 interface ConsignacaoForm {
@@ -115,7 +107,7 @@ const EstatisticasConsignacoes = memo(() => {
   const estatisticas = useMemo(() => {
     const ativas = consignacoes.filter(c => c.status === 'ativa').length;
     const finalizadas = consignacoes.filter(c => c.status === 'finalizada').length;
-    const valorTotal = consignacoes.reduce((acc, c) => acc + c.valorTotal, 0);
+    const valorTotal = consignacoes.reduce((acc, c) => acc + (c.valor_total || 0), 0);
     
     return { ativas, finalizadas, valorTotal };
   }, [consignacoes]);
@@ -163,17 +155,51 @@ export const TelaConsignacoes: React.FC = () => {
   const { 
     tema, 
     consignacoes, 
-    setConsignacoes,
     produtos,
     vendedores,
     mostrarMensagem,
     cookies,
     usuarioLogado,
-    tipoUsuario
+    tipoUsuario,
+    adicionarConsignacao,
+    finalizarConsignacao: finalizarConsignacaoContext,
+    excluirConsignacao: excluirConsignacaoContext,
+    loadingConsignacoes,
+    errorConsignacoes
   } = useAppContext();
   
   const { formatarMoedaBR, formatarCPF, formatarCNPJ, formatarTelefone } = useFormatters();
   const { validarCPF, validarCNPJ } = useValidation();
+
+  // Loading e Erro
+  if (loadingConsignacoes) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando consignações...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorConsignacoes) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar consignações</p>
+          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorConsignacoes}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Estados
   const [modalAberto, setModalAberto] = useState(false);
@@ -200,7 +226,6 @@ export const TelaConsignacoes: React.FC = () => {
   // Estados do formulário
   const [formConsignacao, setFormConsignacao] = useState<ConsignacaoForm>(FORM_INICIAL);
   const [formErrors, setFormErrors] = useState<any>({});
-  const [produtosConsignacao, setProdutosConsignacao] = useState<ProdutoConsignacao[]>([]);
 
   // Salvar filtros nos cookies
   useEffect(() => {
@@ -212,7 +237,7 @@ export const TelaConsignacoes: React.FC = () => {
     let resultado = consignacoes;
 
     if (tipoUsuario === 'vendedor') {
-      resultado = resultado.filter(c => c.vendedorId === usuarioLogado.id);
+      resultado = resultado.filter(c => c.vendedor_id === usuarioLogado.id);
     }
 
     if (filtroStatus !== 'todas') {
@@ -221,9 +246,9 @@ export const TelaConsignacoes: React.FC = () => {
 
     if (buscaTexto) {
       resultado = resultado.filter(c => 
-        c.clienteNome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        c.clienteDocumento.includes(buscaTexto) ||
-        c.vendedor.nome.toLowerCase().includes(buscaTexto.toLowerCase())
+        c.cliente_nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        c.cliente_documento.includes(buscaTexto) ||
+        (c.vendedor && c.vendedor.nome.toLowerCase().includes(buscaTexto.toLowerCase()))
       );
     }
 
@@ -295,7 +320,7 @@ export const TelaConsignacoes: React.FC = () => {
       return;
     }
 
-    const produto = produtos.find(p => p.codigoBarras === codigoLeitura.trim() && p.ativo);
+    const produto = produtos.find(p => p.codigo_barras === codigoLeitura.trim() && p.ativo);
     if (!produto) {
       mostrarMensagem('error', 'Produto não encontrado ou inativo');
       return;
@@ -314,7 +339,7 @@ export const TelaConsignacoes: React.FC = () => {
     }
 
     const novaQuantidade = retornoForm.quantidadeRetornada + 1;
-    const novoValor = retornoForm.valorRetornado + produto.valorVenda;
+    const novoValor = retornoForm.valorRetornado + produto.valor_venda;
 
     setRetornoForm({
       quantidadeRetornada: novaQuantidade,
@@ -322,7 +347,7 @@ export const TelaConsignacoes: React.FC = () => {
     });
 
     setCodigoLeitura('');
-    mostrarMensagem('success', `${produto.nome} adicionado! Valor: ${formatarMoedaBR(produto.valorVenda)}`);
+    mostrarMensagem('success', `${produto.nome} adicionado! Valor: ${formatarMoedaBR(produto.valor_venda)}`);
   }, [codigoLeitura, produtos, produtosLidos, retornoForm, mostrarMensagem, formatarMoedaBR]);
 
   const removerProdutoLido = useCallback((produtoId: number) => {
@@ -350,42 +375,35 @@ export const TelaConsignacoes: React.FC = () => {
     mostrarMensagem('success', `${produtoRemover.produto.nome} removido!`);
   }, [produtosLidos, mostrarMensagem]);
 
-  const finalizarConsignacao = useCallback(() => {
+  const finalizarConsignacao = useCallback(async () => {
     if (!consignacaoRetorno) return;
 
     const quantidadeRetornada = retornoForm.quantidadeRetornada;
     const valorRetornado = retornoForm.valorRetornado;
-    const quantidadeVendida = consignacaoRetorno.quantidadeTotal - quantidadeRetornada;
-    const valorDevido = consignacaoRetorno.valorTotal - valorRetornado;
+    const quantidadeVendida = consignacaoRetorno.quantidade_total - quantidadeRetornada;
+    const valorDevido = consignacaoRetorno.valor_total - valorRetornado;
     
-    const consignacaoAtualizada: Consignacao = {
-      ...consignacaoRetorno,
-      status: 'finalizada',
-      dataRetorno: new Date().toISOString().split('T')[0],
-      retorno: {
-        quantidadeRetornada,
-        valorRetornado,
-        quantidadeVendida,
-        valorDevido
-      }
+    const dadosRetorno = {
+      quantidade_retornada: quantidadeRetornada,
+      valor_retornado: valorRetornado,
+      quantidade_vendida: quantidadeVendida,
+      valor_devido: valorDevido
     };
 
-    setConsignacoes(prev => prev.map(c => 
-      c.id === consignacaoRetorno.id ? consignacaoAtualizada : c
-    ));
-
-    mostrarMensagem('success', 'Consignação finalizada com sucesso!');
-    fecharModalConfirmacao();
-    fecharModalRetorno();
-  }, [consignacaoRetorno, retornoForm, setConsignacoes, mostrarMensagem, fecharModalConfirmacao, fecharModalRetorno]);
+    const resultado = await finalizarConsignacaoContext(consignacaoRetorno.id, dadosRetorno);
+    
+    if (resultado.success) {
+      fecharModalConfirmacao();
+      fecharModalRetorno();
+    }
+  }, [consignacaoRetorno, retornoForm, finalizarConsignacaoContext, fecharModalConfirmacao, fecharModalRetorno]);
 
   // Função para excluir consignação
-  const excluirConsignacao = useCallback((consignacao: Consignacao) => {
-    if (confirm(`Confirma a exclusão da consignação de "${consignacao.clienteNome}"?`)) {
-      setConsignacoes(prev => prev.filter(c => c.id !== consignacao.id));
-      mostrarMensagem('success', 'Consignação excluída com sucesso!');
+  const excluirConsignacao = useCallback(async (consignacao: Consignacao) => {
+    if (confirm(`Confirma a exclusão da consignação de "${consignacao.cliente_nome}"?`)) {
+      await excluirConsignacaoContext(consignacao.id);
     }
-  }, [setConsignacoes, mostrarMensagem]);
+  }, [excluirConsignacaoContext]);
 
   // Validação do formulário
   const validarFormulario = useCallback(() => {
@@ -423,32 +441,33 @@ export const TelaConsignacoes: React.FC = () => {
   }, [formConsignacao, validarCPF, validarCNPJ]);
 
   // Salvar consignação
-  const salvarConsignacao = useCallback(() => {
+  const salvarConsignacao = useCallback(async () => {
     if (!validarFormulario()) return;
 
     const vendedor = vendedores.find(v => v.id === parseInt(formConsignacao.vendedorId));
     if (!vendedor) return;
 
-    const novaConsignacao: Consignacao = {
-      id: Date.now(),
-      clienteNome: formConsignacao.clienteNome,
-      clienteDocumento: formConsignacao.clienteDocumento,
-      clienteTelefone: formConsignacao.clienteTelefone,
-      tipoDocumento: formConsignacao.tipoDocumento,
-      vendedorId: parseInt(formConsignacao.vendedorId),
-      vendedor,
-      quantidadeTotal: parseInt(formConsignacao.quantidadeTotal),
-      valorTotal: parseFloat(formConsignacao.valorTotal),
-      dataConsignacao: new Date().toISOString().split('T')[0],
+    const novaConsignacao = {
+      cliente_nome: formConsignacao.clienteNome,
+      cliente_documento: formConsignacao.clienteDocumento,
+      cliente_telefone: formConsignacao.clienteTelefone,
+      tipo_documento: formConsignacao.tipoDocumento,
+      vendedor_id: parseInt(formConsignacao.vendedorId),
+      quantidade_total: parseInt(formConsignacao.quantidadeTotal),
+      valor_total: parseFloat(formConsignacao.valorTotal),
       status: 'ativa',
-      observacoes: formConsignacao.observacoes || undefined,
-      produtos: produtosConsignacao
+      observacoes: formConsignacao.observacoes || null
     };
 
-    setConsignacoes(prev => [...prev, novaConsignacao]);
-    mostrarMensagem('success', 'Consignação criada com sucesso!');
-    fecharModal();
-  }, [formConsignacao, vendedores, produtosConsignacao, validarFormulario, setConsignacoes, mostrarMensagem, fecharModal]);
+    const resultado = await adicionarConsignacao(novaConsignacao);
+    
+    if (resultado.success) {
+      mostrarMensagem('success', 'Consignação criada com sucesso!');
+      fecharModal();
+    } else {
+      mostrarMensagem('error', resultado.error || 'Erro ao criar consignação');
+    }
+  }, [formConsignacao, vendedores, validarFormulario, adicionarConsignacao, mostrarMensagem, fecharModal]);
 
   return (
     <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
@@ -516,8 +535,8 @@ export const TelaConsignacoes: React.FC = () => {
 
         {/* Lista de Consignações */}
         <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
               <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
                 <tr>
                   <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
@@ -542,30 +561,30 @@ export const TelaConsignacoes: React.FC = () => {
               </thead>
               <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
                 {consignacoesFiltradas.map((consignacao) => (
-                  <tr key={consignacao.id} className={tema.hover}>
+                  <tr key={consignacao.id} className={`${tema.hover} table-hover-row`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className={`text-sm font-medium ${tema.texto}`}>
-                          {consignacao.clienteNome}
+                          {consignacao.cliente_nome}
                         </div>
                         <div className={`text-sm ${tema.textoSecundario}`}>
-                          {consignacao.clienteDocumento}
+                          {consignacao.cliente_documento}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm ${tema.texto}`}>
-                        {consignacao.vendedor.nome}
+                        {consignacao.vendedor?.nome || 'Vendedor não encontrado'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm ${tema.texto}`}>
-                        {consignacao.quantidadeTotal} itens
+                        {consignacao.quantidade_total} itens
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm font-medium ${tema.texto}`}>
-                        {formatarMoedaBR(consignacao.valorTotal)}
+                        {formatarMoedaBR(consignacao.valor_total)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -831,7 +850,7 @@ export const TelaConsignacoes: React.FC = () => {
                 <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[90vh] overflow-y-auto">
                   <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
                     <QrCode className="inline mr-2 h-5 w-5" />
-                    Conferência de Retorno - {consignacaoRetorno.clienteNome}
+                    Conferência de Retorno - {consignacaoRetorno.cliente_nome}
                   </h3>
                   
                   <div className="space-y-6">
@@ -844,15 +863,15 @@ export const TelaConsignacoes: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
                           <span className={`font-medium ${tema.textoSecundario}`}>Cliente:</span>
-                          <p className={tema.texto}>{consignacaoRetorno.clienteNome}</p>
+                          <p className={tema.texto}>{consignacaoRetorno.cliente_nome}</p>
                         </div>
                         <div>
                           <span className={`font-medium ${tema.textoSecundario}`}>Quantidade Total:</span>
-                          <p className={tema.texto}>{consignacaoRetorno.quantidadeTotal} produtos</p>
+                          <p className={tema.texto}>{consignacaoRetorno.quantidade_total} produtos</p>
                         </div>
                         <div>
                           <span className={`font-medium ${tema.textoSecundario}`}>Valor Total:</span>
-                          <p className={tema.texto}>{formatarMoedaBR(consignacaoRetorno.valorTotal)}</p>
+                          <p className={tema.texto}>{formatarMoedaBR(consignacaoRetorno.valor_total)}</p>
                         </div>
                       </div>
                     </div>
@@ -989,17 +1008,17 @@ export const TelaConsignacoes: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Nome:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.clienteNome}</p>
+                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_nome}</p>
                         </div>
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>
-                            {consignacaoDetalhes.tipoDocumento.toUpperCase()}:
+                            {consignacaoDetalhes.tipo_documento.toUpperCase()}:
                           </span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.clienteDocumento}</p>
+                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_documento}</p>
                         </div>
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Telefone:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.clienteTelefone}</p>
+                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_telefone}</p>
                         </div>
                       </div>
                     </div>
@@ -1013,12 +1032,12 @@ export const TelaConsignacoes: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Vendedor:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.vendedor.nome}</p>
+                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.vendedor?.nome || 'Vendedor não encontrado'}</p>
                         </div>
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Data:</span>
                           <p className={`text-sm ${tema.texto}`}>
-                            {new Date(consignacaoDetalhes.dataConsignacao).toLocaleDateString('pt-BR')}
+                            {new Date(consignacaoDetalhes.data_consignacao || consignacaoDetalhes.created_at).toLocaleDateString('pt-BR')}
                           </p>
                         </div>
                         <div>
@@ -1036,13 +1055,13 @@ export const TelaConsignacoes: React.FC = () => {
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor Total:</span>
                           <p className={`text-sm font-bold ${tema.texto}`}>
-                            {formatarMoedaBR(consignacaoDetalhes.valorTotal)}
+                            {formatarMoedaBR(consignacaoDetalhes.valor_total)}
                           </p>
                         </div>
                         <div>
                           <span className={`text-sm font-medium ${tema.textoSecundario}`}>Quantidade:</span>
                           <p className={`text-sm ${tema.texto}`}>
-                            {consignacaoDetalhes.quantidadeTotal} itens
+                            {consignacaoDetalhes.quantidade_total} itens
                           </p>
                         </div>
                       </div>
@@ -1062,7 +1081,7 @@ export const TelaConsignacoes: React.FC = () => {
                     )}
 
                     {/* Resultado da Consignação */}
-                    {consignacaoDetalhes.retorno && (
+                    {consignacaoDetalhes.retorno && consignacaoDetalhes.retorno.length > 0 && (
                       <div>
                         <h3 className={`text-lg font-medium ${tema.texto} mb-3 flex items-center`}>
                           <Calculator className="mr-2 h-5 w-5" />
@@ -1072,25 +1091,25 @@ export const TelaConsignacoes: React.FC = () => {
                           <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
                             <p className={`text-sm ${tema.textoSecundario}`}>Retornados</p>
                             <p className={`text-xl font-bold ${tema.texto}`}>
-                              {consignacaoDetalhes.retorno.quantidadeRetornada}
+                              {consignacaoDetalhes.retorno[0].quantidade_retornada}
                             </p>
                           </div>
                           <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
                             <p className={`text-sm ${tema.textoSecundario}`}>Vendidos</p>
                             <p className={`text-xl font-bold text-green-600`}>
-                              {consignacaoDetalhes.retorno.quantidadeVendida}
+                              {consignacaoDetalhes.retorno[0].quantidade_vendida}
                             </p>
                           </div>
                           <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
                             <p className={`text-sm ${tema.textoSecundario}`}>Valor Retornado</p>
                             <p className={`text-lg font-bold ${tema.texto}`}>
-                              {formatarMoedaBR(consignacaoDetalhes.retorno.valorRetornado)}
+                              {formatarMoedaBR(consignacaoDetalhes.retorno[0].valor_retornado)}
                             </p>
                           </div>
                           <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
                             <p className={`text-sm ${tema.textoSecundario}`}>Valor Devido</p>
-                            <p className={`text-lg font-bold ${consignacaoDetalhes.retorno.valorDevido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatarMoedaBR(consignacaoDetalhes.retorno.valorDevido)}
+                            <p className={`text-lg font-bold ${consignacaoDetalhes.retorno[0].valor_devido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatarMoedaBR(consignacaoDetalhes.retorno[0].valor_devido)}
                             </p>
                           </div>
                         </div>
@@ -1160,11 +1179,11 @@ export const TelaConsignacoes: React.FC = () => {
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                               <span className={`font-medium ${tema.textoSecundario}`}>Cliente:</span>
-                              <p className={tema.texto}>{consignacaoRetorno.clienteNome}</p>
+                              <p className={tema.texto}>{consignacaoRetorno.cliente_nome}</p>
                             </div>
                             <div>
                               <span className={`font-medium ${tema.textoSecundario}`}>Vendedor:</span>
-                              <p className={tema.texto}>{consignacaoRetorno.vendedor.nome}</p>
+                              <p className={tema.texto}>{consignacaoRetorno.vendedor?.nome || 'Vendedor não encontrado'}</p>
                             </div>
                           </div>
 
@@ -1173,10 +1192,10 @@ export const TelaConsignacoes: React.FC = () => {
                               <div className="text-center">
                                 <p className={`text-sm ${tema.textoSecundario}`}>Produtos Consignados</p>
                                 <p className={`text-xl font-bold ${tema.texto}`}>
-                                  {consignacaoRetorno.quantidadeTotal}
+                                  {consignacaoRetorno.quantidade_total}
                                 </p>
                                 <p className={`text-sm ${tema.textoSecundario}`}>
-                                  {formatarMoedaBR(consignacaoRetorno.valorTotal)}
+                                  {formatarMoedaBR(consignacaoRetorno.valor_total)}
                                 </p>
                               </div>
                               <div className="text-center">
@@ -1200,23 +1219,23 @@ export const TelaConsignacoes: React.FC = () => {
                               <div className="text-center">
                                 <p className={`text-sm ${tema.textoSecundario}`}>Produtos Vendidos</p>
                                 <p className={`text-2xl font-bold ${
-                                  (consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada) > 0 
+                                  (consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada) > 0 
                                     ? 'text-green-600' 
                                     : tema.texto
                                 }`}>
-                                  {consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada}
+                                  {consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada}
                                 </p>
                               </div>
                               <div className="text-center">
                                 <p className={`text-sm ${tema.textoSecundario}`}>Valor a Receber</p>
                                 <p className={`text-2xl font-bold ${
-                                  (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) > 0 
+                                  (consignacaoRetorno.valor_total - retornoForm.valorRetornado) > 0 
                                     ? 'text-green-600' 
-                                    : (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) === 0
+                                    : (consignacaoRetorno.valor_total - retornoForm.valorRetornado) === 0
                                     ? tema.texto
                                     : 'text-red-600'
                                 }`}>
-                                  {formatarMoedaBR(consignacaoRetorno.valorTotal - retornoForm.valorRetornado)}
+                                  {formatarMoedaBR(consignacaoRetorno.valor_total - retornoForm.valorRetornado)}
                                 </p>
                               </div>
                             </div>
@@ -1234,8 +1253,8 @@ export const TelaConsignacoes: React.FC = () => {
                                 </h4>
                                 <p className="text-sm text-yellow-700 mt-1">
                                   Você está finalizando esta consignação sem produtos retornados. 
-                                  Isso significa que o cliente vendeu todos os {consignacaoRetorno.quantidadeTotal} produtos 
-                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valorTotal)}.
+                                  Isso significa que o cliente vendeu todos os {consignacaoRetorno.quantidade_total} produtos 
+                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valor_total)}.
                                 </p>
                               </div>
                             </div>
@@ -1250,8 +1269,8 @@ export const TelaConsignacoes: React.FC = () => {
                                 </h4>
                                 <p className="text-sm text-blue-700 mt-1">
                                   {retornoForm.quantidadeRetornada} produto(s) retornado(s) no valor de {formatarMoedaBR(retornoForm.valorRetornado)}. 
-                                  O cliente vendeu {consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada} produto(s) 
-                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valorTotal - retornoForm.valorRetornado)}.
+                                  O cliente vendeu {consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada} produto(s) 
+                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valor_total - retornoForm.valorRetornado)}.
                                 </p>
                               </div>
                             </div>

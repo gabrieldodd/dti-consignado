@@ -1,152 +1,181 @@
-// App.tsx - VERSÃO SIMPLIFICADA SEM TRAVAMENTOS
-import React, { useState, useCallback, useEffect } from 'react';
-import { Menu, Sun, Moon, LogOut } from 'lucide-react';
+// src/App.tsx
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
-
-// Importar apenas as telas que funcionam
-import { Dashboard } from './components/screens/Dashboard';
+import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
 import { TelaVendedores } from './components/screens/TelaVendedores';
 import { TelaProdutos } from './components/screens/TelaProdutos';
 import { TelaCategorias } from './components/screens/TelaCategorias';
-import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
+import { Login } from './components/screens/Login';
+import { Dashboard } from './components/screens/Dashboard';
+import { Mensagem } from './components/common/Mensagem';
+import { LoadingGlobal } from './components/common/LoadingGlobal';
+import { 
+  ShoppingCart, 
+  Package, 
+  Users, 
+  Tag, 
+  BarChart3, 
+  LogOut, 
+  Menu, 
+  X,
+  Sun,
+  Moon,
+  Settings,
+  RefreshCw
+} from 'lucide-react';
 
-// Componente de Login SIMPLES
-const Login: React.FC<{ onLogin: (login: string, senha: string) => void }> = ({ onLogin }) => {
-  const [formData, setFormData] = useState({ login: '', senha: '' });
-  const [carregando, setCarregando] = useState(false);
-  const { tema, temaEscuro, setTemaEscuro } = useAppContext();
+type TelaAtiva = 'login' | 'dashboard' | 'consignacoes' | 'produtos' | 'vendedores' | 'categorias';
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.login || !formData.senha) return;
-    
-    setCarregando(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simular delay
-      onLogin(formData.login, formData.senha);
-    } finally {
-      setCarregando(false);
-    }
-  }, [formData, onLogin]);
+// Componente de Loading Global
+const LoadingOverlay: React.FC = () => {
+  const { 
+    loadingVendedores, 
+    loadingProdutos, 
+    loadingCategorias, 
+    loadingConsignacoes,
+    tema 
+  } = useAppContext();
+
+  const isLoading = loadingVendedores || loadingProdutos || loadingCategorias || loadingConsignacoes;
+
+  if (!isLoading) return null;
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${tema.fundo}`}>
-      <div className={`w-full max-w-md ${tema.papel} rounded-lg shadow-lg p-8 border ${tema.borda}`}>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className={`text-2xl font-bold ${tema.texto}`}>Login</h1>
-          <button
-            onClick={() => setTemaEscuro(!temaEscuro)}
-            className={`p-2 rounded-lg ${tema.hover}`}
-          >
-            {temaEscuro ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Login
-            </label>
-            <input
-              type="text"
-              value={formData.login}
-              onChange={(e) => setFormData(prev => ({ ...prev, login: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-              placeholder="Digite seu login"
-              disabled={carregando}
-            />
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-              Senha
-            </label>
-            <input
-              type="password"
-              value={formData.senha}
-              onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-              placeholder="Digite sua senha"
-              disabled={carregando}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={carregando || !formData.login || !formData.senha}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {carregando ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-
-        <div className={`mt-6 p-4 ${tema.fundo} rounded-lg`}>
-          <p className={`text-sm ${tema.textoSecundario} mb-2`}>Contas de teste:</p>
-          <p className={`text-xs ${tema.textoSecundario}`}>Admin: admin / admin123</p>
-          <p className={`text-xs ${tema.textoSecundario}`}>Vendedor: joao123 / 123456</p>
-        </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className={`${tema.papel} p-6 rounded-lg shadow-xl flex items-center space-x-3`}>
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+        <span className={`${tema.texto} font-medium`}>Carregando dados...</span>
       </div>
     </div>
   );
 };
 
-// Menu Lateral SIMPLES
+// Componente de Menu Lateral
 const MenuLateral: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onNavigate: (tela: string) => void;
-  telaAtiva: string;
-  tipoUsuario: string | null;
-}> = ({ isOpen, onClose, onNavigate, telaAtiva, tipoUsuario }) => {
-  const { tema } = useAppContext();
+  telaAtiva: TelaAtiva;
+  setTelaAtiva: (tela: TelaAtiva) => void;
+  menuAberto: boolean;
+  setMenuAberto: (aberto: boolean) => void;
+}> = ({ telaAtiva, setTelaAtiva, menuAberto, setMenuAberto }) => {
+  const { tema, tipoUsuario, fazerLogout, alternarTema, temaEscuro, refetchTodos } = useAppContext();
 
   const menuItems = [
-    { id: 'dashboard', nome: 'Dashboard', permissao: ['admin', 'vendedor'] },
-    { id: 'consignacoes', nome: 'Consignações', permissao: ['admin', 'vendedor'] },
-    { id: 'produtos', nome: 'Produtos', permissao: ['admin'] },
-    { id: 'categorias', nome: 'Categorias', permissao: ['admin'] },
-    { id: 'vendedores', nome: 'Vendedores', permissao: ['admin'] }
+    { 
+      id: 'dashboard' as TelaAtiva, 
+      label: 'Dashboard', 
+      icon: BarChart3, 
+      permitido: ['admin', 'vendedor'] 
+    },
+    { 
+      id: 'consignacoes' as TelaAtiva, 
+      label: 'Consignações', 
+      icon: ShoppingCart, 
+      permitido: ['admin', 'vendedor'] 
+    },
+    { 
+      id: 'produtos' as TelaAtiva, 
+      label: 'Produtos', 
+      icon: Package, 
+      permitido: ['admin'] 
+    },
+    { 
+      id: 'vendedores' as TelaAtiva, 
+      label: 'Vendedores', 
+      icon: Users, 
+      permitido: ['admin'] 
+    },
+    { 
+      id: 'categorias' as TelaAtiva, 
+      label: 'Categorias', 
+      icon: Tag, 
+      permitido: ['admin'] 
+    }
   ];
 
-  const itensPermitidos = menuItems.filter(item => 
-    item.permissao.includes(tipoUsuario || '')
-  );
-
-  if (!isOpen) return null;
+  const itensPermitidos = menuItems.filter(item => item.permitido.includes(tipoUsuario));
 
   return (
     <>
       {/* Overlay */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-        onClick={onClose}
-      />
+      {menuAberto && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setMenuAberto(false)}
+        />
+      )}
       
       {/* Menu */}
-      <div className={`fixed left-0 top-0 h-full w-64 ${tema.papel} shadow-lg z-50 transform transition-transform duration-300 border-r ${tema.borda}`}>
+      <div className={`
+        fixed left-0 top-0 h-full w-64 ${tema.papel} border-r ${tema.borda} z-50
+        transform ${menuAberto ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0 transition-transform duration-300 ease-in-out
+      `}>
         <div className="p-4">
-          <h2 className={`text-lg font-semibold ${tema.texto} mb-4`}>
-            Sistema Consignação
-          </h2>
-          
-          <nav className="space-y-1">
-            {itensPermitidos.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  onNavigate(item.id);
-                  onClose();
-                }}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                  telaAtiva === item.id 
-                    ? tema.menuAtivo
-                    : `${tema.texto} ${tema.hover}`
-                }`}
-              >
-                {item.nome}
-              </button>
-            ))}
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h1 className={`text-xl font-bold ${tema.texto}`}>Sistema</h1>
+            <button
+              onClick={() => setMenuAberto(false)}
+              className={`lg:hidden ${tema.texto} hover:${tema.hover} p-1 rounded`}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Menu Items */}
+          <nav className="space-y-2">
+            {itensPermitidos.map(item => {
+              const Icon = item.icon;
+              const ativo = telaAtiva === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setTelaAtiva(item.id);
+                    setMenuAberto(false);
+                  }}
+                  className={`
+                    w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left
+                    ${ativo 
+                      ? 'bg-blue-600 text-white' 
+                      : `${tema.texto} ${tema.hover}`
+                    }
+                  `}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
           </nav>
+
+          {/* Configurações */}
+          <div className="mt-8 pt-4 border-t border-gray-200">
+            <button
+              onClick={alternarTema}
+              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left ${tema.texto} ${tema.hover}`}
+            >
+              {temaEscuro ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              <span>{temaEscuro ? 'Tema Claro' : 'Tema Escuro'}</span>
+            </button>
+            
+            <button
+              onClick={refetchTodos}
+              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left ${tema.texto} ${tema.hover}`}
+            >
+              <RefreshCw className="h-5 w-5" />
+              <span>Atualizar Dados</span>
+            </button>
+            
+            <button
+              onClick={fazerLogout}
+              className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left ${tema.texto} ${tema.hover}`}
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Sair</span>
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -155,169 +184,89 @@ const MenuLateral: React.FC<{
 
 // Componente principal da aplicação
 const AppContent: React.FC = () => {
-  const { 
-    usuarioLogado, 
-    setUsuarioLogado,
-    setTipoUsuario,
-    tipoUsuario,
-    vendedores,
-    mostrarMensagem,
-    tema,
-    temaEscuro,
-    setTemaEscuro,
-    cookies
-  } = useAppContext();
-
-  // Estados locais SIMPLES
-  const [telaAtiva, setTelaAtiva] = useState('dashboard');
+  const { tema, usuarioLogado } = useAppContext();
+  const [telaAtiva, setTelaAtiva] = useState<TelaAtiva>(() => {
+    return usuarioLogado ? 'dashboard' : 'login';
+  });
   const [menuAberto, setMenuAberto] = useState(false);
 
-  // Função para fazer login SIMPLIFICADA
-  const fazerLogin = useCallback((login: string, senha: string) => {
-    // Admin
-    if (login === 'admin' && senha === 'admin123') {
-      setUsuarioLogado({ id: 0, nome: 'Administrador', login: 'admin' });
-      setTipoUsuario('admin');
-      mostrarMensagem('success', 'Login realizado com sucesso!');
-      return;
+  // Verificar se está logado
+  useEffect(() => {
+    if (!usuarioLogado) {
+      setTelaAtiva('login');
     }
+  }, [usuarioLogado]);
 
-    // Vendedores
-    const vendedor = vendedores.find(v => 
-      v.login === login && 
-      v.senha === senha && 
-      v.status === 'Ativo'
+  // Se não estiver logado, mostrar tela de login
+  if (telaAtiva === 'login') {
+    return (
+      <div className={`min-h-screen ${tema.fundo}`}>
+        <Login onLoginSuccess={() => setTelaAtiva('dashboard')} />
+      </div>
     );
+  }
 
-    if (vendedor) {
-      setUsuarioLogado(vendedor);
-      setTipoUsuario('vendedor');
-      mostrarMensagem('success', `Bem-vindo, ${vendedor.nome}!`);
-      return;
-    }
-
-    mostrarMensagem('error', 'Login ou senha inválidos!');
-  }, [vendedores, setUsuarioLogado, setTipoUsuario, mostrarMensagem]);
-
-  // Função para logout SIMPLIFICADA
-  const fazerLogout = useCallback(() => {
-    setUsuarioLogado(null);
-    setTipoUsuario(null);
-    setTelaAtiva('dashboard');
-    mostrarMensagem('success', 'Logout realizado com sucesso!');
-  }, [setUsuarioLogado, setTipoUsuario, mostrarMensagem]);
-
-  // Verificar permissões
-  const podeAcessarTela = useCallback((tela: string): boolean => {
-    if (!usuarioLogado) return false;
-    
-    switch (tela) {
-      case 'vendedores':
-      case 'produtos':
-      case 'categorias':
-        return tipoUsuario === 'admin';
-      case 'consignacoes':
-      case 'dashboard':
-        return tipoUsuario === 'admin' || tipoUsuario === 'vendedor';
-      default:
-        return false;
-    }
-  }, [usuarioLogado, tipoUsuario]);
-
-  // Navegar entre telas
-  const navegarPara = useCallback((tela: string) => {
-    if (podeAcessarTela(tela) || tela === 'dashboard') {
-      setTelaAtiva(tela);
-      setMenuAberto(false);
-    } else {
-      mostrarMensagem('error', 'Você não tem permissão para acessar esta funcionalidade');
-    }
-  }, [podeAcessarTela, mostrarMensagem]);
-
-  // Renderizar tela ativa SIMPLIFICADO
-  const renderizarTela = useCallback(() => {
-    if (!usuarioLogado) return <Login onLogin={fazerLogin} />;
-
+  const renderizarTela = () => {
     switch (telaAtiva) {
       case 'dashboard':
         return <Dashboard />;
-      case 'vendedores':
-        return podeAcessarTela('vendedores') ? <TelaVendedores /> : <Dashboard />;
-      case 'produtos':
-        return podeAcessarTela('produtos') ? <TelaProdutos /> : <Dashboard />;
-      case 'categorias':
-        return podeAcessarTela('categorias') ? <TelaCategorias /> : <Dashboard />;
       case 'consignacoes':
-        return podeAcessarTela('consignacoes') ? <TelaConsignacoes /> : <Dashboard />;
+        return <TelaConsignacoes />;
+      case 'produtos':
+        return <TelaProdutos />;
+      case 'vendedores':
+        return <TelaVendedores />;
+      case 'categorias':
+        return <TelaCategorias />;
       default:
         return <Dashboard />;
     }
-  }, [usuarioLogado, telaAtiva, podeAcessarTela, fazerLogin]);
-
-  // Se não estiver logado, mostrar apenas login
-  if (!usuarioLogado) {
-    return renderizarTela();
-  }
+  };
 
   return (
     <div className={`min-h-screen ${tema.fundo}`}>
-      {/* Header */}
-      <header className={`${tema.papel} border-b ${tema.borda} px-4 py-3`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+      {/* Loading Overlay */}
+      <LoadingOverlay />
+      
+      {/* Menu Lateral */}
+      <MenuLateral 
+        telaAtiva={telaAtiva}
+        setTelaAtiva={setTelaAtiva}
+        menuAberto={menuAberto}
+        setMenuAberto={setMenuAberto}
+      />
+
+      {/* Conteúdo Principal */}
+      <div className="lg:ml-64">
+        {/* Header Mobile */}
+        <div className={`lg:hidden ${tema.papel} border-b ${tema.borda} p-4`}>
+          <div className="flex items-center justify-between">
             <button
               onClick={() => setMenuAberto(true)}
-              className={`p-2 rounded-md ${tema.hover}`}
+              className={`${tema.texto} hover:${tema.hover} p-1 rounded`}
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="h-6 w-6" />
             </button>
             <h1 className={`text-lg font-semibold ${tema.texto}`}>
               Sistema de Consignação
             </h1>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <span className={`text-sm ${tema.textoSecundario}`}>
-              {usuarioLogado.nome}
-            </span>
-            
-            <button
-              onClick={() => setTemaEscuro(!temaEscuro)}
-              className={`p-2 rounded-md ${tema.hover}`}
-              title="Alternar tema"
-            >
-              {temaEscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-
-            <button
-              onClick={fazerLogout}
-              className={`p-2 rounded-md ${tema.hover} text-red-600`}
-              title="Sair"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="w-8" /> {/* Spacer */}
           </div>
         </div>
-      </header>
 
-      {/* Menu Lateral */}
-      <MenuLateral
-        isOpen={menuAberto}
-        onClose={() => setMenuAberto(false)}
-        onNavigate={navegarPara}
-        telaAtiva={telaAtiva}
-        tipoUsuario={tipoUsuario}
-      />
+        {/* Conteúdo da Tela */}
+        <main className="p-6">
+          {renderizarTela()}
+        </main>
+      </div>
 
-      {/* Conteúdo Principal */}
-      <main>
-        {renderizarTela()}
-      </main>
+      {/* Mensagens */}
+      <Mensagem />
     </div>
   );
 };
 
-// App principal
+// App Principal com Provider
 const App: React.FC = () => {
   return (
     <AppProvider>

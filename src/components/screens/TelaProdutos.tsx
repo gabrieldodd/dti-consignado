@@ -1,42 +1,41 @@
 // src/components/screens/TelaProdutos.tsx
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { 
   Package, 
   Plus, 
   Search, 
   Edit, 
   Trash2, 
-  Eye, 
-  X, 
-  Save,
   AlertTriangle,
-  Hash,
-  DollarSign,
-  Package2,
-  Filter,
-  BarChart3,
-  QrCode,
-  Tag,
   CheckCircle,
-  TrendingUp,
-  TrendingDown
+  X,
+  Save,
+  BarChart3,
+  DollarSign,
+  Eye,
+  EyeOff,
+  Archive,
+  ArchiveRestore,
+  Tag
 } from 'lucide-react';
+
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
 import { useValidation } from '../../hooks/useValidation';
 
+// Interfaces
 interface Produto {
   id: number;
   nome: string;
   descricao: string;
-  codigoBarras: string;
+  codigo_barras: string;
   categoria: string;
-  valorCusto: number;
-  valorVenda: number;
+  valor_custo: number;
+  valor_venda: number;
   estoque: number;
-  estoqueMinimo: number;
+  estoque_minimo: number;
   ativo: boolean;
-  dataCadastro: string;
+  data_cadastro: string;
 }
 
 interface ProdutoForm {
@@ -51,135 +50,216 @@ interface ProdutoForm {
   ativo: boolean;
 }
 
+// Form inicial
 const FORM_INICIAL: ProdutoForm = {
   nome: '',
   descricao: '',
   codigoBarras: '',
   categoria: '',
-  valorCusto: '0,00',
-  valorVenda: '0,00',
-  estoque: '0',
-  estoqueMinimo: '0',
+  valorCusto: '',
+  valorVenda: '',
+  estoque: '',
+  estoqueMinimo: '',
   ativo: true
 };
 
+// Componente de estatísticas
+const EstatisticasProdutos = memo(() => {
+  const { tema, produtos, controleEstoqueHabilitado } = useAppContext();
+  
+  const estatisticas = useMemo(() => {
+    const ativos = produtos.filter(p => p.ativo).length;
+    const inativos = produtos.filter(p => !p.ativo).length;
+    const total = produtos.length;
+    const estoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoque_minimo).length;
+    const valorTotalEstoque = produtos
+      .filter(p => p.ativo)
+      .reduce((acc, p) => acc + (p.valor_custo * p.estoque), 0);
+    
+    return { ativos, inativos, total, estoqueBaixo, valorTotalEstoque };
+  }, [produtos]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
+            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.total}</p>
+          </div>
+          <Package className="h-8 w-8 text-blue-600" />
+        </div>
+      </div>
+
+      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
+            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.ativos}</p>
+          </div>
+          <CheckCircle className="h-8 w-8 text-green-600" />
+        </div>
+      </div>
+
+      {controleEstoqueHabilitado && (
+        <>
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
+                <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : tema.texto}`}>
+                  {estatisticas.estoqueBaixo}
+                </p>
+              </div>
+              <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-gray-400'}`} />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Valor Estoque</p>
+                <p className={`text-lg font-bold ${tema.texto}`}>
+                  R$ {estatisticas.valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-purple-600" />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
+
+// Componente principal
 export const TelaProdutos: React.FC = () => {
   // Context e Hooks
   const { 
     tema, 
-    produtos, 
-    setProdutos,
+    produtos,
     categorias,
     mostrarMensagem,
+    cookies,
     tipoUsuario,
-    controleEstoqueHabilitado = true,
-    setControleEstoqueHabilitado
+    controleEstoqueHabilitado,
+    adicionarProduto,
+    atualizarProduto,
+    excluirProduto,
+    loadingProdutos,
+    errorProdutos
   } = useAppContext();
   
-  const { formatarMoeda, formatarNumero } = useFormatters();
-  const { validarObrigatorio, validarNumeroPositivo } = useValidation();
+  const { formatarMoedaBR } = useFormatters();
+  const { validarObrigatorio, validarNumeroPositivo, validarCodigoBarras } = useValidation();
 
-  // Estados Locais
+  // Loading e Erro
+  if (loadingProdutos) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando produtos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorProdutos) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar produtos</p>
+          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorProdutos}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Estados
   const [modalAberto, setModalAberto] = useState(false);
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
   const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
   const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null);
-  const [produtoDetalhes, setProdutoDetalhes] = useState<Produto | null>(null);
-  const [formData, setFormData] = useState<ProdutoForm>(FORM_INICIAL);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   
-  // Estados de Filtros
+  // Filtros
+  const [filtroCategoria, setFiltroCategoria] = useState(() => {
+    return cookies.getCookie('filtroCategoriasProdutos') || 'todas';
+  });
+  const [filtroStatus, setFiltroStatus] = useState(() => {
+    return cookies.getCookie('filtroStatusProdutos') || 'todos';
+  });
   const [buscaTexto, setBuscaTexto] = useState('');
-  const [filtroCategoria, setFiltroCategoria] = useState('todas');
-  const [filtroStatus, setFiltroStatus] = useState('todos');
-  const [filtroEstoque, setFiltroEstoque] = useState('todos');
 
-  // Verificar permissões
-  const podeGerenciar = tipoUsuario === 'admin';
+  // Estados do formulário
+  const [formProduto, setFormProduto] = useState<ProdutoForm>(FORM_INICIAL);
+  const [formErrors, setFormErrors] = useState<any>({});
 
-  // Produtos filtrados
+  // Salvar filtros nos cookies
+  useEffect(() => {
+    cookies.setCookie('filtroCategoriasProdutos', filtroCategoria, 30);
+  }, [filtroCategoria, cookies]);
+
+  useEffect(() => {
+    cookies.setCookie('filtroStatusProdutos', filtroStatus, 30);
+  }, [filtroStatus, cookies]);
+
+  // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
-    return produtos.filter(produto => {
-      const matchTexto = buscaTexto === '' || 
-        produto.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        produto.descricao.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        produto.codigoBarras.includes(buscaTexto) ||
-        produto.categoria.toLowerCase().includes(buscaTexto.toLowerCase());
+    let resultado = produtos;
 
-      const matchCategoria = filtroCategoria === 'todas' || produto.categoria === filtroCategoria;
-      const matchStatus = filtroStatus === 'todos' || 
-        (filtroStatus === 'ativo' && produto.ativo) ||
-        (filtroStatus === 'inativo' && !produto.ativo);
+    if (filtroCategoria !== 'todas') {
+      resultado = resultado.filter(p => p.categoria === filtroCategoria);
+    }
 
-      // Aplicar filtro de estoque apenas se o controle estiver habilitado
-      const matchEstoque = !controleEstoqueHabilitado || filtroEstoque === 'todos' ||
-        (filtroEstoque === 'baixo' && produto.estoque <= produto.estoqueMinimo) ||
-        (filtroEstoque === 'normal' && produto.estoque > produto.estoqueMinimo);
+    if (filtroStatus !== 'todos') {
+      const statusFiltro = filtroStatus === 'ativo';
+      resultado = resultado.filter(p => p.ativo === statusFiltro);
+    }
 
-      return matchTexto && matchCategoria && matchStatus && matchEstoque;
-    });
-  }, [produtos, buscaTexto, filtroCategoria, filtroStatus, filtroEstoque, controleEstoqueHabilitado]);
+    if (buscaTexto) {
+      resultado = resultado.filter(p => 
+        p.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        p.descricao.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        p.codigo_barras.includes(buscaTexto)
+      );
+    }
 
-  // Estatísticas
-  const estatisticas = useMemo(() => {
-    const total = produtos.length;
-    const ativos = produtos.filter(p => p.ativo).length;
-    const inativos = produtos.filter(p => !p.ativo).length;
-    
-    // Calcular estatísticas de estoque apenas se o controle estiver habilitado
-    const estoqueBaixo = controleEstoqueHabilitado 
-      ? produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length 
-      : 0;
-      
-    const itensEstoque = controleEstoqueHabilitado 
-      ? produtos.filter(p => p.ativo).reduce((acc, p) => acc + p.estoque, 0)
-      : 0;
-    
-    // Valores sempre calculados baseados no custo unitário, não no estoque
-    const valorTotalEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => {
-      return acc + (controleEstoqueHabilitado ? (p.valorCusto * p.estoque) : p.valorCusto);
-    }, 0);
-    
-    const valorTotalVenda = produtos.filter(p => p.ativo).reduce((acc, p) => {
-      return acc + (controleEstoqueHabilitado ? (p.valorVenda * p.estoque) : p.valorVenda);
-    }, 0);
+    return resultado;
+  }, [produtos, filtroCategoria, filtroStatus, buscaTexto]);
 
-    return {
-      total,
-      ativos,
-      inativos,
-      estoqueBaixo,
-      valorTotalEstoque,
-      valorTotalVenda,
-      itensEstoque
-    };
-  }, [produtos, controleEstoqueHabilitado]);
+  // Calcular margem
+  const calcularMargem = useCallback((valorCusto: number, valorVenda: number): number => {
+    if (valorCusto === 0) return 0;
+    return ((valorVenda - valorCusto) / valorCusto) * 100;
+  }, []);
 
-  // Categorias disponíveis
-  const categoriasDisponiveis = useMemo(() => {
-    return categorias.filter(cat => cat.ativa);
-  }, [categorias]);
-
-  // Gerenciamento do Modal
+  // Handlers modais
   const abrirModal = useCallback((produto?: Produto) => {
     if (produto) {
       setProdutoEditando(produto);
-      setFormData({
+      setFormProduto({
         nome: produto.nome,
         descricao: produto.descricao,
-        codigoBarras: produto.codigoBarras,
+        codigoBarras: produto.codigo_barras,
         categoria: produto.categoria,
-        valorCusto: produto.valorCusto.toFixed(2).replace('.', ','),
-        valorVenda: produto.valorVenda.toFixed(2).replace('.', ','),
+        valorCusto: produto.valor_custo.toString(),
+        valorVenda: produto.valor_venda.toString(),
         estoque: produto.estoque.toString(),
-        estoqueMinimo: produto.estoqueMinimo.toString(),
+        estoqueMinimo: produto.estoque_minimo.toString(),
         ativo: produto.ativo
       });
     } else {
       setProdutoEditando(null);
-      setFormData(FORM_INICIAL);
+      setFormProduto(FORM_INICIAL);
     }
     setFormErrors({});
     setModalAberto(true);
@@ -188,963 +268,673 @@ export const TelaProdutos: React.FC = () => {
   const fecharModal = useCallback(() => {
     setModalAberto(false);
     setProdutoEditando(null);
-    setFormData(FORM_INICIAL);
+    setFormProduto(FORM_INICIAL);
     setFormErrors({});
   }, []);
 
-  // Atualizar campo do formulário
-  const atualizarCampo = useCallback((campo: keyof ProdutoForm, valor: any) => {
-    setFormData(prev => ({ ...prev, [campo]: valor }));
-    
-    // Limpar erro do campo ao digitar
-    if (formErrors[campo]) {
-      setFormErrors(prev => ({ ...prev, [campo]: '' }));
-    }
-  }, [formErrors]);
+  const abrirModalExclusao = useCallback((produto: Produto) => {
+    setProdutoParaExcluir(produto);
+    setModalExclusaoAberto(true);
+  }, []);
 
-  // Atualizar campo monetário (sem formatação durante digitação)
-  const atualizarCampoMoeda = useCallback((campo: 'valorCusto' | 'valorVenda', valor: string) => {
-    // Permitir apenas números, vírgula e ponto
-    const valorLimpo = valor.replace(/[^\d.,]/g, '');
-    setFormData(prev => ({ ...prev, [campo]: valorLimpo }));
-    
-    // Limpar erro do campo ao digitar
-    if (formErrors[campo]) {
-      setFormErrors(prev => ({ ...prev, [campo]: '' }));
-    }
-  }, [formErrors]);
+  const fecharModalExclusao = useCallback(() => {
+    setModalExclusaoAberto(false);
+    setProdutoParaExcluir(null);
+  }, []);
 
-  // Formatar campo monetário quando sair do foco
-  const formatarCampoMoeda = useCallback((campo: 'valorCusto' | 'valorVenda') => {
-    const valor = formData[campo];
-    if (!valor) return;
-    
-    // Converter vírgula para ponto e parsear
-    const valorNumerico = parseFloat(valor.replace(',', '.')) || 0;
-    
-    // Formatar como moeda brasileira sem o símbolo R$
-    const valorFormatado = valorNumerico.toFixed(2).replace('.', ',');
-    
-    setFormData(prev => ({ ...prev, [campo]: valorFormatado }));
-  }, [formData]);
+  // Validação do formulário
+  const validarFormulario = useCallback(() => {
+    const errors: any = {};
 
-  // Validar formulário
-  const validarFormulario = useCallback((): boolean => {
-    const novosErros: Record<string, string> = {};
-
-    // Validar campos obrigatórios
-    if (!validarObrigatorio(formData.nome)) {
-      novosErros.nome = 'Nome é obrigatório';
+    if (!validarObrigatorio(formProduto.nome)) {
+      errors.nome = 'Nome é obrigatório';
     }
 
-    if (!validarObrigatorio(formData.categoria)) {
-      novosErros.categoria = 'Categoria é obrigatória';
+    if (!validarObrigatorio(formProduto.codigoBarras)) {
+      errors.codigoBarras = 'Código de barras é obrigatório';
+    } else if (!validarCodigoBarras(formProduto.codigoBarras)) {
+      errors.codigoBarras = 'Código de barras inválido';
     }
 
-    if (!validarObrigatorio(formData.codigoBarras)) {
-      novosErros.codigoBarras = 'Código de barras é obrigatório';
+    if (!validarObrigatorio(formProduto.categoria)) {
+      errors.categoria = 'Categoria é obrigatória';
     }
 
-    // Validar valores monetários
-    const valorCusto = parseFloat(formData.valorCusto.replace(',', '.')) || 0;
-    const valorVenda = formData.valorVenda ? parseFloat(formData.valorVenda.replace(',', '.')) || 0 : 0;
-
-    // Valor de custo obrigatório e não pode ser negativo
-    if (valorCusto < 0) {
-      novosErros.valorCusto = 'Valor de custo não pode ser negativo';
+    if (!validarObrigatorio(formProduto.valorCusto)) {
+      errors.valorCusto = 'Valor de custo é obrigatório';
+    } else if (!validarNumeroPositivo(formProduto.valorCusto)) {
+      errors.valorCusto = 'Valor de custo deve ser positivo';
     }
 
-    // Valor de venda opcional, mas se preenchido não pode ser negativo
-    if (valorVenda < 0) {
-      novosErros.valorVenda = 'Valor de venda não pode ser negativo';
+    if (!validarObrigatorio(formProduto.valorVenda)) {
+      errors.valorVenda = 'Valor de venda é obrigatório';
+    } else if (!validarNumeroPositivo(formProduto.valorVenda)) {
+      errors.valorVenda = 'Valor de venda deve ser positivo';
     }
 
-    // Se valor de venda foi preenchido e é menor que custo, avisar
-    if (valorVenda > 0 && valorVenda < valorCusto) {
-      novosErros.valorVenda = 'Valor de venda menor que o custo resultará em prejuízo';
-    }
-
-    // Validar campos de estoque apenas se o controle estiver habilitado
     if (controleEstoqueHabilitado) {
-      const estoque = parseInt(formData.estoque) || 0;
-      const estoqueMinimo = parseInt(formData.estoqueMinimo) || 0;
-
-      if (isNaN(estoque) || estoque < 0) {
-        novosErros.estoque = 'Estoque deve ser um número válido';
+      if (!validarObrigatorio(formProduto.estoque)) {
+        errors.estoque = 'Estoque é obrigatório';
       }
 
-      if (isNaN(estoqueMinimo) || estoqueMinimo < 0) {
-        novosErros.estoqueMinimo = 'Estoque mínimo deve ser um número válido';
+      if (!validarObrigatorio(formProduto.estoqueMinimo)) {
+        errors.estoqueMinimo = 'Estoque mínimo é obrigatório';
       }
     }
 
     // Verificar código de barras duplicado
-    const codigoExistente = produtos.find(p => 
-      p.codigoBarras === formData.codigoBarras && 
-      p.id !== produtoEditando?.id
-    );
-
-    if (codigoExistente) {
-      novosErros.codigoBarras = 'Este código de barras já existe';
+    if (!produtoEditando || formProduto.codigoBarras !== produtoEditando.codigo_barras) {
+      const codigoExiste = produtos.some(p => 
+        p.codigo_barras === formProduto.codigoBarras && p.id !== produtoEditando?.id
+      );
+      if (codigoExiste) {
+        errors.codigoBarras = 'Este código de barras já está em uso';
+      }
     }
 
-    setFormErrors(novosErros);
-    return Object.keys(novosErros).length === 0;
-  }, [formData, produtos, produtoEditando, validarObrigatorio, controleEstoqueHabilitado]);
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formProduto, produtoEditando, produtos, controleEstoqueHabilitado, validarObrigatorio, validarNumeroPositivo, validarCodigoBarras]);
 
   // Salvar produto
   const salvarProduto = useCallback(async () => {
     if (!validarFormulario()) return;
 
     setSalvando(true);
-
+    
     try {
-      const produtoData = {
-        nome: formData.nome.trim(),
-        descricao: formData.descricao.trim(),
-        codigoBarras: formData.codigoBarras.trim(),
-        categoria: formData.categoria,
-        valorCusto: parseFloat(formData.valorCusto.replace(',', '.')) || 0,
-        valorVenda: parseFloat(formData.valorVenda.replace(',', '.')) || 0,
-        // Se controle de estoque estiver desabilitado, usar valores padrão
-        estoque: controleEstoqueHabilitado ? (parseInt(formData.estoque) || 0) : 0,
-        estoqueMinimo: controleEstoqueHabilitado ? (parseInt(formData.estoqueMinimo) || 1) : 1,
-        ativo: formData.ativo
+      const dadosProduto = {
+        nome: formProduto.nome,
+        descricao: formProduto.descricao,
+        codigo_barras: formProduto.codigoBarras,
+        categoria: formProduto.categoria,
+        valor_custo: parseFloat(formProduto.valorCusto),
+        valor_venda: parseFloat(formProduto.valorVenda),
+        estoque: controleEstoqueHabilitado ? parseInt(formProduto.estoque) : 0,
+        estoque_minimo: controleEstoqueHabilitado ? parseInt(formProduto.estoqueMinimo) : 0,
+        ativo: formProduto.ativo
       };
 
       if (produtoEditando) {
-        // Editar produto existente
-        setProdutos(prev => prev.map(produto => 
-          produto.id === produtoEditando.id 
-            ? { ...produto, ...produtoData }
-            : produto
-        ));
-        mostrarMensagem('success', 'Produto atualizado com sucesso!');
+        // Atualizar produto existente
+        const resultado = await atualizarProduto(produtoEditando.id, dadosProduto);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Produto atualizado com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao atualizar produto');
+        }
       } else {
         // Criar novo produto
-        const novoProduto: Produto = {
-          ...produtoData,
-          id: Math.max(...produtos.map(p => p.id), 0) + 1,
-          dataCadastro: new Date().toISOString().split('T')[0]
-        };
-        setProdutos(prev => [...prev, novoProduto]);
-        mostrarMensagem('success', 'Produto criado com sucesso!');
+        const resultado = await adicionarProduto(dadosProduto);
+        if (resultado.success) {
+          mostrarMensagem('success', 'Produto criado com sucesso!');
+          fecharModal();
+        } else {
+          mostrarMensagem('error', resultado.error || 'Erro ao criar produto');
+        }
       }
-
-      fecharModal();
     } catch (error) {
-      console.error('Erro ao salvar produto:', error);
       mostrarMensagem('error', 'Erro ao salvar produto');
     } finally {
       setSalvando(false);
     }
-  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal, controleEstoqueHabilitado]);
+  }, [formProduto, produtoEditando, controleEstoqueHabilitado, validarFormulario, adicionarProduto, atualizarProduto, mostrarMensagem, fecharModal]);
 
   // Confirmar exclusão
-  const confirmarExclusao = useCallback((produto: Produto) => {
-    setProdutoParaExcluir(produto);
-    setModalExclusaoAberto(true);
-  }, []);
-
-  // Excluir produto
-  const excluirProduto = useCallback(() => {
+  const confirmarExclusao = useCallback(async () => {
     if (!produtoParaExcluir) return;
 
-    setProdutos(prev => prev.filter(produto => produto.id !== produtoParaExcluir.id));
-    mostrarMensagem('success', 'Produto excluído com sucesso!');
-    setModalExclusaoAberto(false);
-    setProdutoParaExcluir(null);
-  }, [produtoParaExcluir, setProdutos, mostrarMensagem]);
+    setSalvando(true);
+    
+    try {
+      const resultado = await excluirProduto(produtoParaExcluir.id);
+      if (resultado.success) {
+        mostrarMensagem('success', `Produto "${produtoParaExcluir.nome}" excluído com sucesso!`);
+        fecharModalExclusao();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao excluir produto');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro ao excluir produto');
+    } finally {
+      setSalvando(false);
+    }
+  }, [produtoParaExcluir, excluirProduto, mostrarMensagem, fecharModalExclusao]);
 
-  // Alternar status do produto
-  const alternarStatus = useCallback((produto: Produto) => {
-    setProdutos(prev => prev.map(p => 
-      p.id === produto.id 
-        ? { ...p, ativo: !p.ativo }
-        : p
-    ));
-    const novoStatus = produto.ativo ? 'desativado' : 'ativado';
-    mostrarMensagem('success', `Produto ${novoStatus} com sucesso!`);
-  }, [setProdutos, mostrarMensagem]);
+  // Verificar permissões
+  const podeGerenciar = tipoUsuario === 'admin';
 
-  // Ver detalhes do produto
-  const verDetalhes = useCallback((produto: Produto) => {
-    setProdutoDetalhes(produto);
-    setModalDetalhesAberto(true);
-  }, []);
-
-  // Calcular margem de lucro
-  const calcularMargem = useCallback((custo: number, venda: number): number => {
-    if (custo === 0) return 0;
-    return ((venda - custo) / custo) * 100;
-  }, []);
+  if (!podeGerenciar) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
+          <p className={`${tema.texto} font-medium`}>Acesso Negado</p>
+          <p className={`${tema.textoSecundario} text-sm`}>
+            Apenas administradores podem gerenciar produtos
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`p-6 ${tema.fundo} min-h-screen`}>
-      <div className="max-w-7xl mx-auto">
+    <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
+      <div className="container mx-auto px-4 py-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-          <div className="mb-4 lg:mb-0">
-            <h1 className={`text-3xl font-bold ${tema.texto} mb-2`}>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className={`text-2xl font-bold ${tema.texto} flex items-center`}>
+              <Package className="mr-3 h-6 w-6" />
               Produtos
             </h1>
-            <p className={`${tema.textoSecundario}`}>
-              Gerencie o catálogo de produtos da loja
+            <p className={`text-sm ${tema.textoSecundario}`}>
+              Gerencie o catálogo de produtos
             </p>
-            {!controleEstoqueHabilitado && (
-              <div className="mt-2 flex items-center text-sm text-amber-600">
-                <AlertTriangle className="h-4 w-4 mr-1" />
-                Controle de estoque desabilitado
-              </div>
-            )}
           </div>
-          <div className="flex items-center space-x-4">
-            {/* Toggle Controle de Estoque */}
-            {tipoUsuario === 'admin' && setControleEstoqueHabilitado && (
-              <div className="flex items-center space-x-2">
-                <label className={`text-sm font-medium ${tema.texto}`}>
-                  Controle de Estoque
-                </label>
-                <button
-                  onClick={() => setControleEstoqueHabilitado(!controleEstoqueHabilitado)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    controleEstoqueHabilitado ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                  title={controleEstoqueHabilitado ? 'Desabilitar controle de estoque' : 'Habilitar controle de estoque'}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      controleEstoqueHabilitado ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
-            
-            {podeGerenciar && (
-              <button
-                onClick={() => abrirModal()}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Produto
-              </button>
-            )}
-          </div>
+          
+          <button
+            onClick={() => abrirModal()}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Produto
+          </button>
         </div>
 
         {/* Estatísticas */}
-        <div className={`grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6`}>
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
-                <p className={`text-2xl font-bold ${tema.texto}`}>
-                  {formatarNumero(estatisticas.total)}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-blue-600" />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
-                <p className={`text-2xl font-bold text-green-600`}>
-                  {formatarNumero(estatisticas.ativos)}
-                </p>
-              </div>
-              <Package2 className="h-8 w-8 text-green-600" />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Inativos</p>
-                <p className={`text-2xl font-bold text-gray-500`}>
-                  {formatarNumero(estatisticas.inativos)}
-                </p>
-              </div>
-              <Package className="h-8 w-8 text-gray-500" />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Valor Custo</p>
-                <p className={`text-lg font-bold text-orange-600`}>
-                  {formatarMoeda(estatisticas.valorTotalEstoque)}
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-orange-600" />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Valor Venda</p>
-                <p className={`text-lg font-bold text-green-600`}>
-                  {formatarMoeda(estatisticas.valorTotalVenda)}
-                </p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
-          </div>
-
-          {controleEstoqueHabilitado && (
-            <>
-              <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
-                    <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {formatarNumero(estatisticas.estoqueBaixo)}
-                    </p>
-                  </div>
-                  <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`} />
-                </div>
-              </div>
-
-              <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className={`text-sm ${tema.textoSecundario}`}>Itens em Estoque</p>
-                    <p className={`text-xl font-bold ${tema.texto}`}>
-                      {formatarNumero(estatisticas.itensEstoque)}
-                    </p>
-                  </div>
-                  <Hash className="h-8 w-8 text-purple-600" />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        <EstatisticasProdutos />
 
         {/* Filtros */}
-        <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
-          <div className={`grid grid-cols-1 md:grid-cols-${controleEstoqueHabilitado ? '5' : '4'} gap-4`}>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text"
-                placeholder="Buscar produtos..."
-                value={buscaTexto}
-                onChange={(e) => setBuscaTexto(e.target.value)}
-                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-              />
+        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Buscar
+              </label>
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textoSecundario} h-4 w-4`} />
+                <input
+                  type="text"
+                  value={buscaTexto}
+                  onChange={(e) => setBuscaTexto(e.target.value)}
+                  placeholder="Nome, descrição ou código..."
+                  className={`w-full pl-10 pr-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
+                />
+              </div>
             </div>
             
-            <select
-              value={filtroCategoria}
-              onChange={(e) => setFiltroCategoria(e.target.value)}
-              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todas">Todas as Categorias</option>
-              {categoriasDisponiveis.map(categoria => (
-                <option key={categoria.id} value={categoria.nome}>
-                  {categoria.nome}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filtroStatus}
-              onChange={(e) => setFiltroStatus(e.target.value)}
-              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todos">Todos os Status</option>
-              <option value="ativo">Ativos</option>
-              <option value="inativo">Inativos</option>
-            </select>
-
-            {controleEstoqueHabilitado && (
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Categoria
+              </label>
               <select
-                value={filtroEstoque}
-                onChange={(e) => setFiltroEstoque(e.target.value)}
-                className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+                value={filtroCategoria}
+                onChange={(e) => setFiltroCategoria(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
               >
-                <option value="todos">Todos os Estoques</option>
-                <option value="baixo">Estoque Baixo</option>
-                <option value="normal">Estoque Normal</option>
+                <option value="todas">Todas as categorias</option>
+                {categorias.filter(c => c.ativa).map(categoria => (
+                  <option key={categoria.id} value={categoria.nome}>
+                    {categoria.nome}
+                  </option>
+                ))}
               </select>
-            )}
-
-            <div className={`flex items-center justify-end ${tema.textoSecundario}`}>
-              <span className="text-sm">
-                {produtosFiltrados.length} produto(s) encontrado(s)
-              </span>
+            </div>
+            
+            <div>
+              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
+                Status
+              </label>
+              <select
+                value={filtroStatus}
+                onChange={(e) => setFiltroStatus(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
+              >
+                <option value="todos">Todos</option>
+                <option value="ativo">Apenas Ativos</option>
+                <option value="inativo">Apenas Inativos</option>
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <div className={`text-sm ${tema.textoSecundario}`}>
+                {produtosFiltrados.length} de {produtos.length} produtos
+              </div>
             </div>
           </div>
         </div>
 
         {/* Lista de Produtos */}
-        <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} overflow-hidden`}>
-          {produtosFiltrados.length === 0 ? (
-            <div className="p-8 text-center">
-              <Package className={`mx-auto h-16 w-16 ${tema.textoSecundario} mb-4`} />
-              <p className={`text-lg font-medium ${tema.texto} mb-2`}>
+        <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden table-responsive`}>
+          <div className="custom-scrollbar overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
+              <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
+                <tr>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Produto
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Categoria
+                  </th>
+                  {controleEstoqueHabilitado && (
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Estoque
+                    </th>
+                  )}
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Valores
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Margem
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Status
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
+                {produtosFiltrados.map((produto) => {
+                  const margem = calcularMargem(produto.valor_custo, produto.valor_venda);
+                  const estoqueStatus = controleEstoqueHabilitado ? 
+                    (produto.estoque <= produto.estoque_minimo ? 'baixo' : 'normal') : 'disabled';
+                  
+                  return (
+                    <tr key={produto.id} className={`${tema.hover} table-hover-row`}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className={`text-sm font-medium ${tema.texto}`}>
+                            {produto.nome}
+                          </div>
+                          <div className={`text-sm ${tema.textoSecundario}`}>
+                            {produto.codigo_barras}
+                          </div>
+                          {produto.descricao && (
+                            <div className={`text-xs ${tema.textoSecundario} mt-1`}>
+                              {produto.descricao.substring(0, 50)}
+                              {produto.descricao.length > 50 && '...'}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
+                          {produto.categoria}
+                        </span>
+                      </td>
+                      {controleEstoqueHabilitado && (
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm ${estoqueStatus === 'baixo' ? 'text-red-600 font-medium' : tema.texto}`}>
+                            {produto.estoque}
+                            {estoqueStatus === 'baixo' && (
+                              <AlertTriangle className="inline h-4 w-4 ml-1" />
+                            )}
+                          </div>
+                          <div className={`text-xs ${tema.textoSecundario}`}>
+                            Mín: {produto.estoque_minimo}
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm ${tema.texto}`}>
+                          <div>Custo: {formatarMoedaBR(produto.valor_custo)}</div>
+                          <div className="font-medium">Venda: {formatarMoedaBR(produto.valor_venda)}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`text-sm font-medium ${
+                          margem > 30 ? 'text-green-600' : 
+                          margem > 10 ? 'text-yellow-600' : 
+                          'text-red-600'
+                        }`}>
+                          {margem.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          produto.ativo 
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {produto.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            onClick={() => abrirModal(produto)}
+                            className="text-blue-600 hover:text-blue-700"
+                            title="Editar produto"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => abrirModalExclusao(produto)}
+                            className="text-red-600 hover:text-red-700"
+                            title="Excluir produto"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {produtosFiltrados.length === 0 && (
+            <div className="text-center py-12">
+              <Package className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
+              <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
                 Nenhum produto encontrado
-              </p>
-              <p className={`${tema.textoSecundario} mb-4`}>
+              </h3>
+              <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
                 {produtos.length === 0 
-                  ? 'Comece criando seu primeiro produto'
-                  : 'Tente ajustar os filtros para encontrar produtos'
+                  ? 'Comece criando seu primeiro produto.'
+                  : 'Tente ajustar os filtros de busca.'
                 }
               </p>
-              {podeGerenciar && produtos.length === 0 && (
-                <button
-                  onClick={() => abrirModal()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="inline mr-2 h-4 w-4" />
-                  Criar Primeiro Produto
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className={`${tema.fundo} border-b ${tema.borda}`}>
-                  <tr>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Produto
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Categoria
-                    </th>
-                    {controleEstoqueHabilitado && (
-                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                        Estoque
-                      </th>
-                    )}
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Valores
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Margem
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Status
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {produtosFiltrados.map((produto) => {
-                    const margem = calcularMargem(produto.valorCusto, produto.valorVenda);
-                    const estoqueStatus = controleEstoqueHabilitado ? 
-                      (produto.estoque <= produto.estoqueMinimo ? 'baixo' : 'normal') : 'normal';
-
-                    return (
-                      <tr key={produto.id} className={`${tema.hover}`}>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center">
-                                <Package className="h-5 w-5 text-gray-500" />
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              <div className={`text-sm font-medium ${tema.texto}`}>
-                                {produto.nome}
-                              </div>
-                              <div className={`text-sm ${tema.textoSecundario}`}>
-                                {produto.codigoBarras}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800`}>
-                            <Tag className="mr-1 h-3 w-3" />
-                            {produto.categoria}
-                          </span>
-                        </td>
-                        {controleEstoqueHabilitado && (
-                          <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="flex-1">
-                                <div className={`text-sm font-medium ${estoqueStatus === 'baixo' ? 'text-red-600' : tema.texto}`}>
-                                  {formatarNumero(produto.estoque)} unidades
-                                </div>
-                                <div className={`text-xs ${tema.textoSecundario}`}>
-                                  Mín: {formatarNumero(produto.estoqueMinimo)}
-                                </div>
-                              </div>
-                              {estoqueStatus === 'baixo' && (
-                                <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
-                              )}
-                            </div>
-                          </td>
-                        )}
-                        <td className="px-6 py-4">
-                          <div className="text-sm">
-                            <div className={`font-medium ${tema.texto}`}>
-                              Venda: {formatarMoeda(produto.valorVenda)}
-                            </div>
-                            <div className={`${tema.textoSecundario}`}>
-                              Custo: {formatarMoeda(produto.valorCusto)}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <span className={`text-sm font-medium ${margem >= 50 ? 'text-green-600' : margem >= 20 ? 'text-yellow-600' : 'text-red-600'}`}>
-                              {margem.toFixed(1)}%
-                            </span>
-                            {margem >= 50 ? (
-                              <TrendingUp className="ml-1 h-4 w-4 text-green-600" />
-                            ) : margem >= 20 ? (
-                              <BarChart3 className="ml-1 h-4 w-4 text-yellow-600" />
-                            ) : (
-                              <TrendingDown className="ml-1 h-4 w-4 text-red-600" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => alternarStatus(produto)}
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              produto.ativo 
-                                ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                                : 'bg-red-100 text-red-800 hover:bg-red-200'
-                            } transition-colors`}
-                          >
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            {produto.ativo ? 'Ativo' : 'Inativo'}
-                          </button>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => verDetalhes(produto)}
-                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                              title="Ver detalhes"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            {podeGerenciar && (
-                              <>
-                                <button
-                                  onClick={() => abrirModal(produto)}
-                                  className="p-1 text-gray-500 hover:text-yellow-600 transition-colors"
-                                  title="Editar produto"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => confirmarExclusao(produto)}
-                                  className="p-1 text-gray-500 hover:text-red-600 transition-colors"
-                                  title="Excluir produto"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Modal de Criação/Edição */}
-      {modalAberto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className={`text-lg font-semibold ${tema.texto}`}>
-                {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
-              </h3>
-              <button
-                onClick={fecharModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
+        {/* Modal Produto */}
+        {modalAberto && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModal()}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
+                    {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Nome */}
+                    <div className="md:col-span-2">
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Nome *
+                      </label>
+                      <input
+                        type="text"
+                        value={formProduto.nome}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, nome: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.nome ? 'border-red-500' : tema.borda}`}
+                        placeholder="Nome do produto"
+                        disabled={salvando}
+                      />
+                      {formErrors.nome && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
+                      )}
+                    </div>
 
-            <div className="p-6 space-y-4">
-              {/* Nome */}
-              <div>
-                <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                  Nome do Produto *
-                </label>
-                <input
-                  type="text"
-                  value={formData.nome}
-                  onChange={(e) => atualizarCampo('nome', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.nome ? 'border-red-500' : ''
-                  } ${tema.input}`}
-                  placeholder="Digite o nome do produto"
-                />
-                {formErrors.nome && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
-                )}
-              </div>
+                    {/* Código de Barras */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Código de Barras *
+                      </label>
+                      <input
+                        type="text"
+                        value={formProduto.codigoBarras}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, codigoBarras: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.codigoBarras ? 'border-red-500' : tema.borda}`}
+                        placeholder="000000000000"
+                        disabled={salvando}
+                      />
+                      {formErrors.codigoBarras && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.codigoBarras}</p>
+                      )}
+                    </div>
 
-              {/* Descrição */}
-              <div>
-                <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                  Descrição
-                </label>
-                <textarea
-                  value={formData.descricao}
-                  onChange={(e) => atualizarCampo('descricao', e.target.value)}
-                  rows={3}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-                  placeholder="Descrição do produto (opcional)"
-                />
-              </div>
+                    {/* Categoria */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Categoria *
+                      </label>
+                      <select
+                        value={formProduto.categoria}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, categoria: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.categoria ? 'border-red-500' : tema.borda}`}
+                        disabled={salvando}
+                      >
+                        <option value="">Selecione uma categoria</option>
+                        {categorias.filter(c => c.ativa).map(categoria => (
+                          <option key={categoria.id} value={categoria.nome}>
+                            {categoria.nome}
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.categoria && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.categoria}</p>
+                      )}
+                    </div>
 
-              {/* Código de Barras e Categoria */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Código de Barras *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.codigoBarras}
-                    onChange={(e) => atualizarCampo('codigoBarras', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.codigoBarras ? 'border-red-500' : ''
-                    } ${tema.input}`}
-                    placeholder="123456789012"
-                  />
-                  {formErrors.codigoBarras && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.codigoBarras}</p>
-                  )}
+                    {/* Valor de Custo */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Valor de Custo *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formProduto.valorCusto}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, valorCusto: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.valorCusto ? 'border-red-500' : tema.borda}`}
+                        placeholder="0,00"
+                        disabled={salvando}
+                      />
+                      {formErrors.valorCusto && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
+                      )}
+                    </div>
+
+                    {/* Valor de Venda */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Valor de Venda *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formProduto.valorVenda}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, valorVenda: e.target.value }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.valorVenda ? 'border-red-500' : tema.borda}`}
+                        placeholder="0,00"
+                        disabled={salvando}
+                      />
+                      {formErrors.valorVenda && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
+                      )}
+                    </div>
+
+                    {/* Campos de Estoque (apenas se habilitado) */}
+                    {controleEstoqueHabilitado && (
+                      <>
+                        <div>
+                          <label className={`block text-sm font-medium ${tema.texto}`}>
+                            Estoque Atual *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formProduto.estoque}
+                            onChange={(e) => setFormProduto(prev => ({ ...prev, estoque: e.target.value }))}
+                            className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.estoque ? 'border-red-500' : tema.borda}`}
+                            placeholder="0"
+                            disabled={salvando}
+                          />
+                          {formErrors.estoque && (
+                            <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className={`block text-sm font-medium ${tema.texto}`}>
+                            Estoque Mínimo *
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formProduto.estoqueMinimo}
+                            onChange={(e) => setFormProduto(prev => ({ ...prev, estoqueMinimo: e.target.value }))}
+                            className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.estoqueMinimo ? 'border-red-500' : tema.borda}`}
+                            placeholder="0"
+                            disabled={salvando}
+                          />
+                          {formErrors.estoqueMinimo && (
+                            <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Descrição */}
+                    <div className="md:col-span-2">
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Descrição
+                      </label>
+                      <textarea
+                        value={formProduto.descricao}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, descricao: e.target.value }))}
+                        rows={3}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        placeholder="Descrição detalhada do produto..."
+                        disabled={salvando}
+                      />
+                    </div>
+
+                    {/* Status */}
+                    <div>
+                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                        Status
+                      </label>
+                      <select
+                        value={formProduto.ativo ? 'ativo' : 'inativo'}
+                        onChange={(e) => setFormProduto(prev => ({ ...prev, ativo: e.target.value === 'ativo' }))}
+                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        disabled={salvando}
+                      >
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                      </select>
+                    </div>
+
+                    {/* Margem (apenas visualização) */}
+                    {formProduto.valorCusto && formProduto.valorVenda && (
+                      <div>
+                        <label className={`block text-sm font-medium ${tema.texto}`}>
+                          Margem de Lucro
+                        </label>
+                        <div className={`mt-1 px-3 py-2 border rounded-md ${tema.input} ${tema.borda} bg-gray-50`}>
+                          <span className={`text-sm font-medium ${
+                            calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)) > 30 
+                              ? 'text-green-600' 
+                              : calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)) > 10
+                              ? 'text-yellow-600'
+                              : 'text-red-600'
+                          }`}>
+                            {calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)).toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 pt-6">
+                    <button
+                      onClick={fecharModal}
+                      disabled={salvando}
+                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover} disabled:opacity-50`}
+                    >
+                      <X className="mr-2 h-4 w-4 inline" />
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={salvarProduto}
+                      disabled={salvando}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                    >
+                      {salvando ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          {produtoEditando ? 'Atualizar' : 'Criar'}
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Categoria *
-                  </label>
-                  <select
-                    value={formData.categoria}
-                    onChange={(e) => atualizarCampo('categoria', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.categoria ? 'border-red-500' : ''
-                    } ${tema.input}`}
+        {/* Modal de Confirmação de Exclusão */}
+        {modalExclusaoAberto && produtoParaExcluir && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModalExclusao()}></div>
+              
+              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="sm:flex sm:items-start">
+                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                      <AlertTriangle className="h-6 w-6 text-red-600" />
+                    </div>
+                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
+                        Confirmar Exclusão
+                      </h3>
+                      <div className="mt-2">
+                        <p className={`text-sm ${tema.textoSecundario}`}>
+                          Tem certeza que deseja excluir o produto <strong>{produtoParaExcluir.nome}</strong>? 
+                          Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    onClick={confirmarExclusao}
+                    disabled={salvando}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                   >
-                    <option value="">Selecione uma categoria</option>
-                    {categoriasDisponiveis.map(categoria => (
-                      <option key={categoria.id} value={categoria.nome}>
-                        {categoria.nome}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.categoria && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.categoria}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Valores */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Valor de Custo *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R$</span>
-                    <input
-                      type="text"
-                      value={formData.valorCusto}
-                      onChange={(e) => atualizarCampoMoeda('valorCusto', e.target.value)}
-                      onBlur={() => formatarCampoMoeda('valorCusto')}
-                      className={`w-full pl-12 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        formErrors.valorCusto ? 'border-red-500' : ''
-                      } ${tema.input}`}
-                      placeholder="0,00"
-                    />
-                  </div>
-                  {formErrors.valorCusto && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Valor de Venda *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R$</span>
-                    <input
-                      type="text"
-                      value={formData.valorVenda}
-                      onChange={(e) => atualizarCampoMoeda('valorVenda', e.target.value)}
-                      onBlur={() => formatarCampoMoeda('valorVenda')}
-                      className={`w-full pl-12 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        formErrors.valorVenda ? 'border-red-500' : ''
-                      } ${tema.input}`}
-                      placeholder="0,00"
-                    />
-                  </div>
-                  {formErrors.valorVenda && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Estoque */}
-              {controleEstoqueHabilitado ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                      Estoque Atual
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.estoque}
-                      onChange={(e) => atualizarCampo('estoque', e.target.value)}
-                      min="0"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        formErrors.estoque ? 'border-red-500' : ''
-                      } ${tema.input}`}
-                      placeholder="0"
-                    />
-                    {formErrors.estoque && (
-                      <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
+                    {salvando ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Excluindo...
+                      </>
+                    ) : (
+                      'Excluir'
                     )}
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                      Estoque Mínimo
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.estoqueMinimo}
-                      onChange={(e) => atualizarCampo('estoqueMinimo', e.target.value)}
-                      min="0"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        formErrors.estoqueMinimo ? 'border-red-500' : ''
-                      } ${tema.input}`}
-                      placeholder="0"
-                    />
-                    {formErrors.estoqueMinimo && (
-                      <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
-                    )}
-                  </div>
+                  </button>
+                  <button
+                    onClick={fecharModalExclusao}
+                    disabled={salvando}
+                    className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50`}
+                  >
+                    Cancelar
+                  </button>
                 </div>
-              ) : (
-                <div className="flex items-center p-3 bg-amber-50 border border-amber-200 rounded-md">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 mr-2" />
-                  <div className="text-sm">
-                    <p className="font-medium text-amber-800">Controle de estoque desabilitado</p>
-                    <p className="text-amber-700">Os campos de estoque não são obrigatórios quando o controle está desabilitado.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Status */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="ativo"
-                  checked={formData.ativo}
-                  onChange={(e) => atualizarCampo('ativo', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="ativo" className={`ml-2 text-sm ${tema.texto}`}>
-                  Produto ativo
-                </label>
-              </div>
-
-              {/* Margem de Lucro Preview */}
-              {formData.valorCusto && formData.valorVenda && (
-                <div className={`p-3 rounded-md bg-blue-50 border border-blue-200`}>
-                  <div className="flex items-center">
-                    <BarChart3 className="h-5 w-5 text-blue-600 mr-2" />
-                    <span className="text-sm font-medium text-blue-800">
-                      Margem de Lucro: {calcularMargem(
-                        parseFloat(formData.valorCusto.replace(',', '.')) || 0,
-                        parseFloat(formData.valorVenda.replace(',', '.')) || 0
-                      ).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
-              <button
-                onClick={fecharModal}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={salvarProduto}
-                disabled={salvando}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {salvando ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    {produtoEditando ? 'Atualizar' : 'Criar'} Produto
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmação de Exclusão */}
-      {modalExclusaoAberto && produtoParaExcluir && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-md`}>
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
-                <h3 className={`text-lg font-semibold ${tema.texto}`}>
-                  Confirmar Exclusão
-                </h3>
-              </div>
-              <p className={`${tema.textoSecundario} mb-6`}>
-                Tem certeza que deseja excluir o produto "{produtoParaExcluir.nome}"? 
-                Esta ação não pode ser desfeita.
-              </p>
-              <div className="flex items-center justify-end space-x-3">
-                <button
-                  onClick={() => setModalExclusaoAberto(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={excluirProduto}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                >
-                  Excluir
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Modal de Detalhes */}
-      {modalDetalhesAberto && produtoDetalhes && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-lg`}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className={`text-lg font-semibold ${tema.texto}`}>
-                Detalhes do Produto
-              </h3>
-              <button
-                onClick={() => setModalDetalhesAberto(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Nome:</span>
-                  <p className={`${tema.texto}`}>{produtoDetalhes.nome}</p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Categoria:</span>
-                  <p className={`${tema.texto}`}>{produtoDetalhes.categoria}</p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Código de Barras:</span>
-                  <p className={`${tema.texto}`}>{produtoDetalhes.codigoBarras}</p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Status:</span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    produtoDetalhes.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {produtoDetalhes.ativo ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor de Custo:</span>
-                  <p className={`${tema.texto} font-medium`}>{formatarMoeda(produtoDetalhes.valorCusto)}</p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor de Venda:</span>
-                  <p className={`${tema.texto} font-medium`}>{formatarMoeda(produtoDetalhes.valorVenda)}</p>
-                </div>
-                {controleEstoqueHabilitado && (
-                  <>
-                    <div>
-                      <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Atual:</span>
-                      <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoque)} unidades</p>
-                    </div>
-                    <div>
-                      <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Mínimo:</span>
-                      <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoqueMinimo)} unidades</p>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Margem de Lucro:</span>
-                  <p className={`font-medium ${calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda) >= 50 ? 'text-green-600' : 'text-yellow-600'}`}>
-                    {calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda).toFixed(1)}%
-                  </p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Data de Cadastro:</span>
-                  <p className={`${tema.texto}`}>
-                    {new Date(produtoDetalhes.dataCadastro).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-              </div>
-
-              {produtoDetalhes.descricao && (
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Descrição:</span>
-                  <p className={`${tema.texto} mt-1`}>{produtoDetalhes.descricao}</p>
-                </div>
-              )}
-
-              {/* Alertas */}
-              {controleEstoqueHabilitado && produtoDetalhes.estoque <= produtoDetalhes.estoqueMinimo && (
-                <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-md">
-                  <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-                  <span className="text-sm text-red-800">
-                    Estoque baixo! Considere reabastecer este produto.
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end p-6 border-t border-gray-200">
-              <button
-                onClick={() => setModalDetalhesAberto(false)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
