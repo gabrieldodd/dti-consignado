@@ -10,6 +10,7 @@ import { TelaCategorias } from './components/screens/TelaCategorias';
 import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
 import { MenuLateral } from './components/layout/MenuLateral';
 
+
 // Componentes de tela temporários (serão criados depois)
 /*const TelaConsignacoes = () => {
   const { tema } = useAppContext();
@@ -278,9 +279,9 @@ const AppContent: React.FC = () => {
       case 'produtos':
         return podeAcessarTela('produtos') ? <TelaProdutos /> : <Dashboard />;
       case 'categorias':
-        return podeAcessarTela('categorias') ? <TelaCategorias /> : <Dashboard />;
-      case 'consignacoes':
-        return podeAcessarTela('consignacoes') ? <TelaConsignacoes /> : <Dashboard />;
+		return podeAcessarTela('categorias') ? <TelaCategorias /> : <Dashboard />;
+	  case 'consignacoes':
+		return podeAcessarTela('consignacoes') ? <TelaConsignacoes /> : <Dashboard />;
       default:
         return <Dashboard />;
     }
