@@ -6,10 +6,12 @@ import { Login } from './components/screens/Login';
 import { Dashboard } from './components/screens/Dashboard';
 import { TelaVendedores } from './components/screens/TelaVendedores';
 import { TelaProdutos } from './components/screens/TelaProdutos';
+import { TelaCategorias } from './components/screens/TelaCategorias';
+import { TelaConsignacoes } from './components/screens/TelaConsignacoes';
 import { MenuLateral } from './components/layout/MenuLateral';
 
 // Componentes de tela temporários (serão criados depois)
-const TelaConsignacoes = () => {
+/*const TelaConsignacoes = () => {
   const { tema } = useAppContext();
   return (
     <div className={`p-6 ${tema.fundo} min-h-screen`}>
@@ -19,9 +21,9 @@ const TelaConsignacoes = () => {
       </div>
     </div>
   );
-};
+};*/
 
-const TelaCategorias = () => {
+/*const TelaCategorias = () => {
   const { tema } = useAppContext();
   return (
     <div className={`p-6 ${tema.fundo} min-h-screen`}>
@@ -31,7 +33,7 @@ const TelaCategorias = () => {
       </div>
     </div>
   );
-};
+};*/
 
 // Componente principal da aplicação
 const AppContent: React.FC = () => {
