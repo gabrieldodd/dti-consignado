@@ -74,7 +74,7 @@ export const TelaProdutos: React.FC = () => {
     tipoUsuario 
   } = useAppContext();
   
-  const { formatarMoeda, formatarNumero, limparFormatacao } = useFormatters();
+  const { formatarMoeda, formatarNumero } = useFormatters();
   const { validarObrigatorio, validarNumeroPositivo, validarCodigoBarras } = useValidation();
 
   // Estados Locais
@@ -154,8 +154,8 @@ export const TelaProdutos: React.FC = () => {
         descricao: produto.descricao,
         codigoBarras: produto.codigoBarras,
         categoria: produto.categoria,
-        valorCusto: formatarMoeda(produto.valorCusto),
-        valorVenda: formatarMoeda(produto.valorVenda),
+        valorCusto: produto.valorCusto.toFixed(2).replace('.', ','),
+        valorVenda: produto.valorVenda.toFixed(2).replace('.', ','),
         estoque: produto.estoque.toString(),
         estoqueMinimo: produto.estoqueMinimo.toString(),
         ativo: produto.ativo
@@ -166,7 +166,7 @@ export const TelaProdutos: React.FC = () => {
     }
     setFormErrors({});
     setModalAberto(true);
-  }, [formatarMoeda]);
+  }, []);
 
   const fecharModal = useCallback(() => {
     setModalAberto(false);
@@ -184,6 +184,32 @@ export const TelaProdutos: React.FC = () => {
       setFormErrors(prev => ({ ...prev, [campo]: '' }));
     }
   }, [formErrors]);
+
+  // Atualizar campo monetário (sem formatação durante digitação)
+  const atualizarCampoMoeda = useCallback((campo: 'valorCusto' | 'valorVenda', valor: string) => {
+    // Permitir apenas números, vírgula e ponto
+    const valorLimpo = valor.replace(/[^\d.,]/g, '');
+    setFormData(prev => ({ ...prev, [campo]: valorLimpo }));
+    
+    // Limpar erro do campo ao digitar
+    if (formErrors[campo]) {
+      setFormErrors(prev => ({ ...prev, [campo]: '' }));
+    }
+  }, [formErrors]);
+
+  // Formatar campo monetário quando sair do foco
+  const formatarCampoMoeda = useCallback((campo: 'valorCusto' | 'valorVenda') => {
+    const valor = formData[campo];
+    if (!valor) return;
+    
+    // Converter vírgula para ponto e parsear
+    const valorNumerico = parseFloat(valor.replace(',', '.')) || 0;
+    
+    // Formatar como moeda brasileira sem o símbolo R$
+    const valorFormatado = valorNumerico.toFixed(2).replace('.', ',');
+    
+    setFormData(prev => ({ ...prev, [campo]: valorFormatado }));
+  }, [formData]);
 
   // Validar formulário
   const validarFormulario = useCallback((): boolean => {
@@ -204,11 +230,11 @@ export const TelaProdutos: React.FC = () => {
       novosErros.codigoBarras = 'Código de barras deve ter entre 8 e 14 dígitos';
     }
 
-    // Validar valores numéricos
-    const valorCusto = parseFloat(limparFormatacao(formData.valorCusto));
-    const valorVenda = parseFloat(limparFormatacao(formData.valorVenda));
-    const estoque = parseInt(formData.estoque);
-    const estoqueMinimo = parseInt(formData.estoqueMinimo);
+    // Validar valores numéricos - conversão melhorada
+    const valorCusto = parseFloat(formData.valorCusto.replace(',', '.')) || 0;
+    const valorVenda = parseFloat(formData.valorVenda.replace(',', '.')) || 0;
+    const estoque = parseInt(formData.estoque) || 0;
+    const estoqueMinimo = parseInt(formData.estoqueMinimo) || 0;
 
     if (!validarNumeroPositivo(valorCusto)) {
       novosErros.valorCusto = 'Valor de custo deve ser maior que zero';
@@ -242,7 +268,7 @@ export const TelaProdutos: React.FC = () => {
 
     setFormErrors(novosErros);
     return Object.keys(novosErros).length === 0;
-  }, [formData, produtos, produtoEditando, validarObrigatorio, validarCodigoBarras, validarNumeroPositivo, limparFormatacao]);
+  }, [formData, produtos, produtoEditando, validarObrigatorio, validarCodigoBarras, validarNumeroPositivo]);
 
   // Salvar produto
   const salvarProduto = useCallback(async () => {
@@ -256,10 +282,10 @@ export const TelaProdutos: React.FC = () => {
         descricao: formData.descricao.trim(),
         codigoBarras: formData.codigoBarras.trim(),
         categoria: formData.categoria,
-        valorCusto: parseFloat(limparFormatacao(formData.valorCusto)),
-        valorVenda: parseFloat(limparFormatacao(formData.valorVenda)),
-        estoque: parseInt(formData.estoque),
-        estoqueMinimo: parseInt(formData.estoqueMinimo),
+        valorCusto: parseFloat(formData.valorCusto.replace(',', '.')) || 0,
+        valorVenda: parseFloat(formData.valorVenda.replace(',', '.')) || 0,
+        estoque: parseInt(formData.estoque) || 0,
+        estoqueMinimo: parseInt(formData.estoqueMinimo) || 0,
         ativo: formData.ativo
       };
 
@@ -289,7 +315,7 @@ export const TelaProdutos: React.FC = () => {
     } finally {
       setSalvando(false);
     }
-  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal, limparFormatacao]);
+  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal]);
 
   // Confirmar exclusão
   const confirmarExclusao = useCallback((produto: Produto) => {
@@ -769,15 +795,19 @@ export const TelaProdutos: React.FC = () => {
                   <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
                     Valor de Custo *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.valorCusto}
-                    onChange={(e) => atualizarCampo('valorCusto', formatarMoeda(parseFloat(limparFormatacao(e.target.value)) || 0))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.valorCusto ? 'border-red-500' : ''
-                    } ${tema.input}`}
-                    placeholder="R$ 0,00"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R$</span>
+                    <input
+                      type="text"
+                      value={formData.valorCusto}
+                      onChange={(e) => atualizarCampoMoeda('valorCusto', e.target.value)}
+                      onBlur={() => formatarCampoMoeda('valorCusto')}
+                      className={`w-full pl-12 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.valorCusto ? 'border-red-500' : ''
+                      } ${tema.input}`}
+                      placeholder="0,00"
+                    />
+                  </div>
                   {formErrors.valorCusto && (
                     <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
                   )}
@@ -787,15 +817,19 @@ export const TelaProdutos: React.FC = () => {
                   <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
                     Valor de Venda *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.valorVenda}
-                    onChange={(e) => atualizarCampo('valorVenda', formatarMoeda(parseFloat(limparFormatacao(e.target.value)) || 0))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.valorVenda ? 'border-red-500' : ''
-                    } ${tema.input}`}
-                    placeholder="R$ 0,00"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R$</span>
+                    <input
+                      type="text"
+                      value={formData.valorVenda}
+                      onChange={(e) => atualizarCampoMoeda('valorVenda', e.target.value)}
+                      onBlur={() => formatarCampoMoeda('valorVenda')}
+                      className={`w-full pl-12 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.valorVenda ? 'border-red-500' : ''
+                      } ${tema.input}`}
+                      placeholder="0,00"
+                    />
+                  </div>
                   {formErrors.valorVenda && (
                     <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
                   )}
@@ -864,8 +898,8 @@ export const TelaProdutos: React.FC = () => {
                     <BarChart3 className="h-5 w-5 text-blue-600 mr-2" />
                     <span className="text-sm font-medium text-blue-800">
                       Margem de Lucro: {calcularMargem(
-                        parseFloat(limparFormatacao(formData.valorCusto)),
-                        parseFloat(limparFormatacao(formData.valorVenda))
+                        parseFloat(formData.valorCusto.replace(',', '.')) || 0,
+                        parseFloat(formData.valorVenda.replace(',', '.')) || 0
                       ).toFixed(1)}%
                     </span>
                   </div>
