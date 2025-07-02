@@ -14,7 +14,12 @@ import {
   DollarSign,
   Package2,
   Filter,
-  BarChart3
+  BarChart3,
+  QrCode,
+  Tag,
+  CheckCircle,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useFormatters } from '../../hooks/useFormatters';
@@ -66,7 +71,7 @@ export const TelaProdutos: React.FC = () => {
     setProdutos,
     categorias,
     mostrarMensagem,
-    cookies 
+    tipoUsuario 
   } = useAppContext();
   
   const { formatarMoeda, formatarNumero, limparFormatacao } = useFormatters();
@@ -82,117 +87,65 @@ export const TelaProdutos: React.FC = () => {
   const [formData, setFormData] = useState<ProdutoForm>(FORM_INICIAL);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
-
-  // Filtros e Busca
+  
+  // Estados de Filtros
   const [buscaTexto, setBuscaTexto] = useState('');
-  const [filtroCategoria, setFiltroCategoria] = useState(() => {
-    return cookies.getCookie('filtroCategoriaProdutos') || 'todas';
-  });
-  const [filtroStatus, setFiltroStatus] = useState(() => {
-    return cookies.getCookie('filtroStatusProdutos') || 'todos';
-  });
-  const [filtroEstoque, setFiltroEstoque] = useState(() => {
-    return cookies.getCookie('filtroEstoqueProdutos') || 'todos';
-  });
+  const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroEstoque, setFiltroEstoque] = useState('todos');
 
-  // Salvar filtros nos cookies
-  useEffect(() => {
-    cookies.setCookie('filtroCategoriaProdutos', filtroCategoria, 30);
-    cookies.setCookie('filtroStatusProdutos', filtroStatus, 30);
-    cookies.setCookie('filtroEstoqueProdutos', filtroEstoque, 30);
-  }, [filtroCategoria, filtroStatus, filtroEstoque, cookies]);
+  // Verificar permissões
+  const podeGerenciar = tipoUsuario === 'admin';
 
-  // Função para formatar entrada de moeda
-  const formatarMoedaInput = useCallback((valor: string): string => {
-    const numeros = limparFormatacao(valor);
-    const valorNumerico = parseFloat(numeros) / 100 || 0;
-    return valorNumerico.toFixed(2).replace('.', ',');
-  }, [limparFormatacao]);
-
-  // Dados filtrados e estatísticas
-  const { produtosFiltrados, estatisticas } = useMemo(() => {
-    let filtrados = produtos.filter(produto => {
-      // Filtro de busca
-      const matchBusca = !buscaTexto || 
+  // Produtos filtrados
+  const produtosFiltrados = useMemo(() => {
+    return produtos.filter(produto => {
+      const matchTexto = buscaTexto === '' || 
         produto.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
+        produto.descricao.toLowerCase().includes(buscaTexto.toLowerCase()) ||
         produto.codigoBarras.includes(buscaTexto) ||
         produto.categoria.toLowerCase().includes(buscaTexto.toLowerCase());
-      
-      // Filtro de categoria
-      const matchCategoria = filtroCategoria === 'todas' || 
-        produto.categoria === filtroCategoria;
-      
-      // Filtro de status
+
+      const matchCategoria = filtroCategoria === 'todas' || produto.categoria === filtroCategoria;
       const matchStatus = filtroStatus === 'todos' || 
         (filtroStatus === 'ativo' && produto.ativo) ||
         (filtroStatus === 'inativo' && !produto.ativo);
-      
-      // Filtro de estoque
+
       const matchEstoque = filtroEstoque === 'todos' ||
         (filtroEstoque === 'baixo' && produto.estoque <= produto.estoqueMinimo) ||
         (filtroEstoque === 'normal' && produto.estoque > produto.estoqueMinimo);
-      
-      return matchBusca && matchCategoria && matchStatus && matchEstoque;
+
+      return matchTexto && matchCategoria && matchStatus && matchEstoque;
     });
-
-    // Calcular estatísticas
-    const stats = {
-      total: produtos.length,
-      ativos: produtos.filter(p => p.ativo).length,
-      inativos: produtos.filter(p => !p.ativo).length,
-      estoqueBaixo: produtos.filter(p => p.estoque <= p.estoqueMinimo).length,
-      valorTotalEstoque: produtos.reduce((acc, p) => acc + (p.valorCusto * p.estoque), 0),
-      valorTotalVenda: produtos.reduce((acc, p) => acc + (p.valorVenda * p.estoque), 0)
-    };
-
-    return { produtosFiltrados: filtrados, estatisticas: stats };
   }, [produtos, buscaTexto, filtroCategoria, filtroStatus, filtroEstoque]);
 
-  // Validar formulário
-  const validarFormulario = useCallback((): boolean => {
-    const errors: Record<string, string> = {};
+  // Estatísticas
+  const estatisticas = useMemo(() => {
+    const total = produtos.length;
+    const ativos = produtos.filter(p => p.ativo).length;
+    const inativos = produtos.filter(p => !p.ativo).length;
+    const estoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length;
+    const valorTotalEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => acc + (p.valorCusto * p.estoque), 0);
+    const valorTotalVenda = produtos.filter(p => p.ativo).reduce((acc, p) => acc + (p.valorVenda * p.estoque), 0);
+    const itensEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => acc + p.estoque, 0);
 
-    if (!validarObrigatorio(formData.nome)) {
-      errors.nome = 'Nome é obrigatório';
-    }
+    return {
+      total,
+      ativos,
+      inativos,
+      estoqueBaixo,
+      valorTotalEstoque,
+      valorTotalVenda,
+      itensEstoque
+    };
+  }, [produtos]);
 
-    if (!validarObrigatorio(formData.categoria)) {
-      errors.categoria = 'Categoria é obrigatória';
-    }
+  // Categorias disponíveis
+  const categoriasDisponiveis = useMemo(() => {
+    return categorias.filter(cat => cat.ativa);
+  }, [categorias]);
 
-    if (formData.codigoBarras && !validarCodigoBarras(formData.codigoBarras)) {
-      errors.codigoBarras = 'Código de barras inválido';
-    }
-
-    const valorCusto = parseFloat(formData.valorCusto.replace(',', '.')) || 0;
-    if (!validarNumeroPositivo(valorCusto)) {
-      errors.valorCusto = 'Valor de custo deve ser maior que zero';
-    }
-
-    const valorVenda = parseFloat(formData.valorVenda.replace(',', '.')) || 0;
-    if (!validarNumeroPositivo(valorVenda)) {
-      errors.valorVenda = 'Valor de venda deve ser maior que zero';
-    }
-
-    if (valorVenda <= valorCusto) {
-      errors.valorVenda = 'Valor de venda deve ser maior que o custo';
-    }
-
-    const estoque = parseInt(formData.estoque) || 0;
-    if (estoque < 0) {
-      errors.estoque = 'Estoque não pode ser negativo';
-    }
-
-    const estoqueMinimo = parseInt(formData.estoqueMinimo) || 0;
-    if (estoqueMinimo < 0) {
-      errors.estoqueMinimo = 'Estoque mínimo não pode ser negativo';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData, validarObrigatorio, validarNumeroPositivo, validarCodigoBarras]);
-
-  // Funções de CRUD
+  // Gerenciamento do Modal
   const abrirModal = useCallback((produto?: Produto) => {
     if (produto) {
       setProdutoEditando(produto);
@@ -201,8 +154,8 @@ export const TelaProdutos: React.FC = () => {
         descricao: produto.descricao,
         codigoBarras: produto.codigoBarras,
         categoria: produto.categoria,
-        valorCusto: produto.valorCusto.toFixed(2).replace('.', ','),
-        valorVenda: produto.valorVenda.toFixed(2).replace('.', ','),
+        valorCusto: formatarMoeda(produto.valorCusto),
+        valorVenda: formatarMoeda(produto.valorVenda),
         estoque: produto.estoque.toString(),
         estoqueMinimo: produto.estoqueMinimo.toString(),
         ativo: produto.ativo
@@ -213,7 +166,7 @@ export const TelaProdutos: React.FC = () => {
     }
     setFormErrors({});
     setModalAberto(true);
-  }, []);
+  }, [formatarMoeda]);
 
   const fecharModal = useCallback(() => {
     setModalAberto(false);
@@ -222,18 +175,89 @@ export const TelaProdutos: React.FC = () => {
     setFormErrors({});
   }, []);
 
+  // Atualizar campo do formulário
+  const atualizarCampo = useCallback((campo: keyof ProdutoForm, valor: any) => {
+    setFormData(prev => ({ ...prev, [campo]: valor }));
+    
+    // Limpar erro do campo ao digitar
+    if (formErrors[campo]) {
+      setFormErrors(prev => ({ ...prev, [campo]: '' }));
+    }
+  }, [formErrors]);
+
+  // Validar formulário
+  const validarFormulario = useCallback((): boolean => {
+    const novosErros: Record<string, string> = {};
+
+    // Validar campos obrigatórios
+    if (!validarObrigatorio(formData.nome)) {
+      novosErros.nome = 'Nome é obrigatório';
+    }
+
+    if (!validarObrigatorio(formData.categoria)) {
+      novosErros.categoria = 'Categoria é obrigatória';
+    }
+
+    if (!validarObrigatorio(formData.codigoBarras)) {
+      novosErros.codigoBarras = 'Código de barras é obrigatório';
+    } else if (!validarCodigoBarras(formData.codigoBarras)) {
+      novosErros.codigoBarras = 'Código de barras deve ter entre 8 e 14 dígitos';
+    }
+
+    // Validar valores numéricos
+    const valorCusto = parseFloat(limparFormatacao(formData.valorCusto));
+    const valorVenda = parseFloat(limparFormatacao(formData.valorVenda));
+    const estoque = parseInt(formData.estoque);
+    const estoqueMinimo = parseInt(formData.estoqueMinimo);
+
+    if (!validarNumeroPositivo(valorCusto)) {
+      novosErros.valorCusto = 'Valor de custo deve ser maior que zero';
+    }
+
+    if (!validarNumeroPositivo(valorVenda)) {
+      novosErros.valorVenda = 'Valor de venda deve ser maior que zero';
+    }
+
+    if (valorVenda <= valorCusto) {
+      novosErros.valorVenda = 'Valor de venda deve ser maior que o custo';
+    }
+
+    if (isNaN(estoque) || estoque < 0) {
+      novosErros.estoque = 'Estoque deve ser um número válido';
+    }
+
+    if (isNaN(estoqueMinimo) || estoqueMinimo < 1) {
+      novosErros.estoqueMinimo = 'Estoque mínimo deve ser pelo menos 1';
+    }
+
+    // Verificar código de barras duplicado
+    const codigoExistente = produtos.find(p => 
+      p.codigoBarras === formData.codigoBarras && 
+      p.id !== produtoEditando?.id
+    );
+
+    if (codigoExistente) {
+      novosErros.codigoBarras = 'Este código de barras já existe';
+    }
+
+    setFormErrors(novosErros);
+    return Object.keys(novosErros).length === 0;
+  }, [formData, produtos, produtoEditando, validarObrigatorio, validarCodigoBarras, validarNumeroPositivo, limparFormatacao]);
+
+  // Salvar produto
   const salvarProduto = useCallback(async () => {
     if (!validarFormulario()) return;
 
     setSalvando(true);
+
     try {
-      const produtoData: Omit<Produto, 'id' | 'dataCadastro'> = {
+      const produtoData = {
         nome: formData.nome.trim(),
         descricao: formData.descricao.trim(),
         codigoBarras: formData.codigoBarras.trim(),
         categoria: formData.categoria,
-        valorCusto: parseFloat(formData.valorCusto.replace(',', '.')),
-        valorVenda: parseFloat(formData.valorVenda.replace(',', '.')),
+        valorCusto: parseFloat(limparFormatacao(formData.valorCusto)),
+        valorVenda: parseFloat(limparFormatacao(formData.valorVenda)),
         estoque: parseInt(formData.estoque),
         estoqueMinimo: parseInt(formData.estoqueMinimo),
         ativo: formData.ativo
@@ -265,13 +289,15 @@ export const TelaProdutos: React.FC = () => {
     } finally {
       setSalvando(false);
     }
-  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal]);
+  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal, limparFormatacao]);
 
+  // Confirmar exclusão
   const confirmarExclusao = useCallback((produto: Produto) => {
     setProdutoParaExcluir(produto);
     setModalExclusaoAberto(true);
   }, []);
 
+  // Excluir produto
   const excluirProduto = useCallback(() => {
     if (!produtoParaExcluir) return;
 
@@ -281,6 +307,7 @@ export const TelaProdutos: React.FC = () => {
     setProdutoParaExcluir(null);
   }, [produtoParaExcluir, setProdutos, mostrarMensagem]);
 
+  // Alternar status do produto
   const alternarStatus = useCallback((produto: Produto) => {
     setProdutos(prev => prev.map(p => 
       p.id === produto.id 
@@ -291,697 +318,617 @@ export const TelaProdutos: React.FC = () => {
     mostrarMensagem('success', `Produto ${novoStatus} com sucesso!`);
   }, [setProdutos, mostrarMensagem]);
 
+  // Ver detalhes do produto
   const verDetalhes = useCallback((produto: Produto) => {
     setProdutoDetalhes(produto);
     setModalDetalhesAberto(true);
   }, []);
 
+  // Calcular margem de lucro
   const calcularMargem = useCallback((custo: number, venda: number): number => {
     if (custo === 0) return 0;
     return ((venda - custo) / custo) * 100;
   }, []);
 
-  // Categorias disponíveis
-  const categoriasDisponiveis = useMemo(() => {
-    return categorias.filter(cat => cat.ativa).map(cat => cat.nome);
-  }, [categorias]);
-
   return (
     <div className={`p-6 ${tema.fundo} min-h-screen`}>
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div className="mb-4 lg:mb-0">
-          <h1 className={`text-3xl font-bold ${tema.texto} mb-2`}>
-            Produtos
-          </h1>
-          <p className={`${tema.textoSecundario}`}>
-            Gerencie o catálogo de produtos da loja
-          </p>
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
+          <div className="mb-4 lg:mb-0">
+            <h1 className={`text-3xl font-bold ${tema.texto} mb-2`}>
+              Produtos
+            </h1>
+            <p className={`${tema.textoSecundario}`}>
+              Gerencie o catálogo de produtos da loja
+            </p>
+          </div>
+          {podeGerenciar && (
+            <button
+              onClick={() => abrirModal()}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Produto
+            </button>
+          )}
         </div>
-        <button
-          onClick={() => abrirModal()}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Produto
-        </button>
-      </div>
 
-      {/* Estatísticas */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
-              <p className={`text-2xl font-bold ${tema.texto}`}>
-                {formatarNumero(estatisticas.total)}
-              </p>
+        {/* Estatísticas */}
+        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4 mb-6">
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
+                <p className={`text-2xl font-bold ${tema.texto}`}>
+                  {formatarNumero(estatisticas.total)}
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-blue-600" />
             </div>
-            <Package className="h-8 w-8 text-blue-600" />
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
+                <p className={`text-2xl font-bold text-green-600`}>
+                  {formatarNumero(estatisticas.ativos)}
+                </p>
+              </div>
+              <Package2 className="h-8 w-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Inativos</p>
+                <p className={`text-2xl font-bold text-gray-500`}>
+                  {formatarNumero(estatisticas.inativos)}
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-gray-500" />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
+                <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatarNumero(estatisticas.estoqueBaixo)}
+                </p>
+              </div>
+              <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`} />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Itens em Estoque</p>
+                <p className={`text-xl font-bold ${tema.texto}`}>
+                  {formatarNumero(estatisticas.itensEstoque)}
+                </p>
+              </div>
+              <Hash className="h-8 w-8 text-purple-600" />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Valor Custo</p>
+                <p className={`text-lg font-bold text-orange-600`}>
+                  {formatarMoeda(estatisticas.valorTotalEstoque)}
+                </p>
+              </div>
+              <DollarSign className="h-8 w-8 text-orange-600" />
+            </div>
+          </div>
+
+          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${tema.textoSecundario}`}>Valor Venda</p>
+                <p className={`text-lg font-bold text-green-600`}>
+                  {formatarMoeda(estatisticas.valorTotalVenda)}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
+            </div>
           </div>
         </div>
 
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
-              <p className={`text-2xl font-bold text-green-600`}>
-                {formatarNumero(estatisticas.ativos)}
-              </p>
-            </div>
-            <Package2 className="h-8 w-8 text-green-600" />
-          </div>
-        </div>
-
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Inativos</p>
-              <p className={`text-2xl font-bold text-red-600`}>
-                {formatarNumero(estatisticas.inativos)}
-              </p>
-            </div>
-            <X className="h-8 w-8 text-red-600" />
-          </div>
-        </div>
-
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
-              <p className={`text-2xl font-bold text-yellow-600`}>
-                {formatarNumero(estatisticas.estoqueBaixo)}
-              </p>
-            </div>
-            <AlertTriangle className="h-8 w-8 text-yellow-600" />
-          </div>
-        </div>
-
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Valor Custo</p>
-              <p className={`text-xl font-bold ${tema.texto}`}>
-                {formatarMoeda(estatisticas.valorTotalEstoque)}
-              </p>
-            </div>
-            <DollarSign className="h-8 w-8 text-blue-600" />
-          </div>
-        </div>
-
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${tema.textoSecundario}`}>Valor Venda</p>
-              <p className={`text-xl font-bold text-green-600`}>
-                {formatarMoeda(estatisticas.valorTotalVenda)}
-              </p>
-            </div>
-            <BarChart3 className="h-8 w-8 text-green-600" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* Busca */}
-          <div className="md:col-span-2">
+        {/* Filtros */}
+        <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
-                placeholder="Buscar por nome, código ou categoria..."
+                placeholder="Buscar produtos..."
                 value={buscaTexto}
                 onChange={(e) => setBuscaTexto(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+                className={`pl-10 w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
               />
             </div>
-          </div>
-
-          {/* Filtro Categoria */}
-          <div>
+            
             <select
               value={filtroCategoria}
               onChange={(e) => setFiltroCategoria(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
             >
-              <option value="todas">Todas as categorias</option>
+              <option value="todas">Todas as Categorias</option>
               {categoriasDisponiveis.map(categoria => (
-                <option key={categoria} value={categoria}>{categoria}</option>
+                <option key={categoria.id} value={categoria.nome}>
+                  {categoria.nome}
+                </option>
               ))}
             </select>
-          </div>
 
-          {/* Filtro Status */}
-          <div>
             <select
               value={filtroStatus}
               onChange={(e) => setFiltroStatus(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
             >
-              <option value="todos">Todos os status</option>
-              <option value="ativo">Apenas ativos</option>
-              <option value="inativo">Apenas inativos</option>
+              <option value="todos">Todos os Status</option>
+              <option value="ativo">Ativos</option>
+              <option value="inativo">Inativos</option>
             </select>
-          </div>
 
-          {/* Filtro Estoque */}
-          <div>
             <select
               value={filtroEstoque}
               onChange={(e) => setFiltroEstoque(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
+              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
             >
-              <option value="todos">Todo estoque</option>
-              <option value="baixo">Estoque baixo</option>
-              <option value="normal">Estoque normal</option>
+              <option value="todos">Todos os Estoques</option>
+              <option value="baixo">Estoque Baixo</option>
+              <option value="normal">Estoque Normal</option>
             </select>
+
+            <div className={`flex items-center justify-end ${tema.textoSecundario}`}>
+              <span className="text-sm">
+                {produtosFiltrados.length} produto(s) encontrado(s)
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Contador de resultados */}
-        <div className="mt-4 flex items-center justify-between">
-          <span className={`text-sm ${tema.textoSecundario}`}>
-            {produtosFiltrados.length} de {produtos.length} produtos
-          </span>
-          {(buscaTexto || filtroCategoria !== 'todas' || filtroStatus !== 'todos' || filtroEstoque !== 'todos') && (
-            <button
-              onClick={() => {
-                setBuscaTexto('');
-                setFiltroCategoria('todas');
-                setFiltroStatus('todos');
-                setFiltroEstoque('todos');
-              }}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Limpar filtros
-            </button>
+        {/* Lista de Produtos */}
+        <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} overflow-hidden`}>
+          {produtosFiltrados.length === 0 ? (
+            <div className="p-8 text-center">
+              <Package className={`mx-auto h-16 w-16 ${tema.textoSecundario} mb-4`} />
+              <p className={`text-lg font-medium ${tema.texto} mb-2`}>
+                Nenhum produto encontrado
+              </p>
+              <p className={`${tema.textoSecundario} mb-4`}>
+                {produtos.length === 0 
+                  ? 'Comece criando seu primeiro produto'
+                  : 'Tente ajustar os filtros para encontrar produtos'
+                }
+              </p>
+              {podeGerenciar && produtos.length === 0 && (
+                <button
+                  onClick={() => abrirModal()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="inline mr-2 h-4 w-4" />
+                  Criar Primeiro Produto
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className={`${tema.fundo} border-b ${tema.borda}`}>
+                  <tr>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Produto
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Categoria
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Estoque
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Valores
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Margem
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Status
+                    </th>
+                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {produtosFiltrados.map((produto) => {
+                    const margem = calcularMargem(produto.valorCusto, produto.valorVenda);
+                    const estoqueStatus = produto.estoque <= produto.estoqueMinimo ? 'baixo' : 'normal';
+
+                    return (
+                      <tr key={produto.id} className={`${tema.hover}`}>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center">
+                                <Package className="h-5 w-5 text-gray-500" />
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className={`text-sm font-medium ${tema.texto}`}>
+                                {produto.nome}
+                              </div>
+                              <div className={`text-sm ${tema.textoSecundario}`}>
+                                {produto.codigoBarras}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800`}>
+                            <Tag className="mr-1 h-3 w-3" />
+                            {produto.categoria}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <div className="flex-1">
+                              <div className={`text-sm font-medium ${estoqueStatus === 'baixo' ? 'text-red-600' : tema.texto}`}>
+                                {formatarNumero(produto.estoque)} unidades
+                              </div>
+                              <div className={`text-xs ${tema.textoSecundario}`}>
+                                Mín: {formatarNumero(produto.estoqueMinimo)}
+                              </div>
+                            </div>
+                            {estoqueStatus === 'baixo' && (
+                              <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm">
+                            <div className={`font-medium ${tema.texto}`}>
+                              Venda: {formatarMoeda(produto.valorVenda)}
+                            </div>
+                            <div className={`${tema.textoSecundario}`}>
+                              Custo: {formatarMoeda(produto.valorCusto)}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            <span className={`text-sm font-medium ${margem >= 50 ? 'text-green-600' : margem >= 20 ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {margem.toFixed(1)}%
+                            </span>
+                            {margem >= 50 ? (
+                              <TrendingUp className="ml-1 h-4 w-4 text-green-600" />
+                            ) : margem >= 20 ? (
+                              <BarChart3 className="ml-1 h-4 w-4 text-yellow-600" />
+                            ) : (
+                              <TrendingDown className="ml-1 h-4 w-4 text-red-600" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => alternarStatus(produto)}
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              produto.ativo 
+                                ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                                : 'bg-red-100 text-red-800 hover:bg-red-200'
+                            } transition-colors`}
+                          >
+                            <CheckCircle className="mr-1 h-3 w-3" />
+                            {produto.ativo ? 'Ativo' : 'Inativo'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => verDetalhes(produto)}
+                              className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+                              title="Ver detalhes"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {podeGerenciar && (
+                              <>
+                                <button
+                                  onClick={() => abrirModal(produto)}
+                                  className="p-1 text-gray-500 hover:text-yellow-600 transition-colors"
+                                  title="Editar produto"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => confirmarExclusao(produto)}
+                                  className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+                                  title="Excluir produto"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Lista de Produtos */}
-      <div className={`${tema.papel} rounded-lg shadow-sm border ${tema.borda} overflow-hidden`}>
-        {/* Desktop: Tabela */}
-        <div className="hidden lg:block">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className={tema.fundo}>
-              <tr>
-                <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Produto
-                </th>
-                <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Categoria
-                </th>
-                <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Preços
-                </th>
-                <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Estoque
-                </th>
-                <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Status
-                </th>
-                <th className={`px-6 py-3 text-right text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                  Ações
-                </th>
-              </tr>
-            </thead>
-            <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-              {produtosFiltrados.map((produto) => (
-                <tr key={produto.id} className={tema.hover}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="ml-4">
-                        <div className={`text-sm font-medium ${tema.texto}`}>
-                          {produto.nome}
-                        </div>
-                        <div className={`text-sm ${tema.textoSecundario}`}>
-                          Código: {produto.codigoBarras || 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
-                      {produto.categoria}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm ${tema.texto}`}>
-                      Venda: {formatarMoeda(produto.valorVenda)}
-                    </div>
-                    <div className={`text-sm ${tema.textoSecundario}`}>
-                      Custo: {formatarMoeda(produto.valorCusto)}
-                    </div>
-                    <div className={`text-xs text-green-600`}>
-                      Margem: {calcularMargem(produto.valorCusto, produto.valorVenda).toFixed(1)}%
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm ${tema.texto}`}>
-                      Atual: {formatarNumero(produto.estoque)}
-                    </div>
-                    <div className={`text-sm ${tema.textoSecundario}`}>
-                      Mínimo: {formatarNumero(produto.estoqueMinimo)}
-                    </div>
-                    {produto.estoque <= produto.estoqueMinimo && (
-                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Baixo
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      produto.ativo 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {produto.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => verDetalhes(produto)}
-                        className="text-blue-600 hover:text-blue-700"
-                        title="Ver detalhes"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => abrirModal(produto)}
-                        className="text-indigo-600 hover:text-indigo-700"
-                        title="Editar"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => alternarStatus(produto)}
-                        className={produto.ativo ? "text-yellow-600 hover:text-yellow-700" : "text-green-600 hover:text-green-700"}
-                        title={produto.ativo ? "Desativar" : "Ativar"}
-                      >
-                        {produto.ativo ? <X className="h-4 w-4" /> : <Package className="h-4 w-4" />}
-                      </button>
-                      <button
-                        onClick={() => confirmarExclusao(produto)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile: Cards */}
-        <div className="lg:hidden">
-          {produtosFiltrados.map((produto) => (
-            <div key={produto.id} className={`p-4 border-b ${tema.borda} last:border-b-0`}>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className={`font-medium ${tema.texto}`}>
-                  {produto.nome}
-                </h3>
-                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                  produto.ativo 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {produto.ativo ? 'Ativo' : 'Inativo'}
-                </span>
-              </div>
-              
-              <div className={`text-sm ${tema.textoSecundario} mb-2`}>
-                Código: {produto.codigoBarras || 'N/A'} • {produto.categoria}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 mb-3">
-                <div>
-                  <span className={`text-xs ${tema.textoSecundario}`}>Preços:</span>
-                  <div className={`text-sm ${tema.texto}`}>
-                    Venda: {formatarMoeda(produto.valorVenda)}
-                  </div>
-                  <div className={`text-xs ${tema.textoSecundario}`}>
-                    Custo: {formatarMoeda(produto.valorCusto)}
-                  </div>
-                </div>
-                <div>
-                  <span className={`text-xs ${tema.textoSecundario}`}>Estoque:</span>
-                  <div className={`text-sm ${tema.texto}`}>
-                    {formatarNumero(produto.estoque)} / {formatarNumero(produto.estoqueMinimo)}
-                  </div>
-                  {produto.estoque <= produto.estoqueMinimo && (
-                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      Baixo
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-end space-x-3">
-                <button
-                  onClick={() => verDetalhes(produto)}
-                  className="text-blue-600 hover:text-blue-700"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => abrirModal(produto)}
-                  className="text-indigo-600 hover:text-indigo-700"
-                >
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => alternarStatus(produto)}
-                  className={produto.ativo ? "text-yellow-600 hover:text-yellow-700" : "text-green-600 hover:text-green-700"}
-                >
-                  {produto.ativo ? <X className="h-4 w-4" /> : <Package className="h-4 w-4" />}
-                </button>
-                <button
-                  onClick={() => confirmarExclusao(produto)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Estado vazio */}
-        {produtosFiltrados.length === 0 && (
-          <div className="text-center py-12">
-            <Package className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
-            <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
-              Nenhum produto encontrado
-            </h3>
-            <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
-              {produtos.length === 0 
-                ? 'Comece criando seu primeiro produto.'
-                : 'Tente ajustar os filtros de busca.'
-              }
-            </p>
-            {produtos.length === 0 && (
-              <div className="mt-6">
-                <button
-                  onClick={() => abrirModal()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Produto
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Modal de Cadastro/Edição */}
+      {/* Modal de Criação/Edição */}
       {modalAberto && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModal}></div>
-            
-            <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-              <div className={`${tema.papel} px-4 pt-5 pb-4 sm:p-6 sm:pb-4`}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto}`}>
-                    {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
-                  </h3>
-                  <button
-                    onClick={fecharModal}
-                    className={`${tema.textoSecundario} hover:${tema.texto}`}
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className={`text-lg font-semibold ${tema.texto}`}>
+                {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
+              </h3>
+              <button
+                onClick={fecharModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Nome */}
+              <div>
+                <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                  Nome do Produto *
+                </label>
+                <input
+                  type="text"
+                  value={formData.nome}
+                  onChange={(e) => atualizarCampo('nome', e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    formErrors.nome ? 'border-red-500' : ''
+                  } ${tema.input}`}
+                  placeholder="Digite o nome do produto"
+                />
+                {formErrors.nome && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
+                )}
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                  Descrição
+                </label>
+                <textarea
+                  value={formData.descricao}
+                  onChange={(e) => atualizarCampo('descricao', e.target.value)}
+                  rows={3}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+                  placeholder="Descrição do produto (opcional)"
+                />
+              </div>
+
+              {/* Código de Barras e Categoria */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Código de Barras *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.codigoBarras}
+                    onChange={(e) => atualizarCampo('codigoBarras', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.codigoBarras ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                    placeholder="123456789012"
+                  />
+                  {formErrors.codigoBarras && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.codigoBarras}</p>
+                  )}
                 </div>
 
-                <form className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Nome */}
-                    <div className="md:col-span-2">
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Nome do Produto *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.nome}
-                        onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.nome ? 'border-red-500' : ''
-                        } ${tema.input}`}
-                        placeholder="Digite o nome do produto"
-                      />
-                      {formErrors.nome && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
-                      )}
-                    </div>
-
-                    {/* Categoria */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Categoria *
-                      </label>
-                      <select
-                        value={formData.categoria}
-                        onChange={(e) => setFormData(prev => ({ ...prev, categoria: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.categoria ? 'border-red-500' : ''
-                        } ${tema.input}`}
-                      >
-                        <option value="">Selecione uma categoria</option>
-                        {categoriasDisponiveis.map(categoria => (
-                          <option key={categoria} value={categoria}>{categoria}</option>
-                        ))}
-                      </select>
-                      {formErrors.categoria && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.categoria}</p>
-                      )}
-                    </div>
-
-                    {/* Código de Barras */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Código de Barras
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.codigoBarras}
-                        onChange={(e) => setFormData(prev => ({ ...prev, codigoBarras: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.codigoBarras ? 'border-red-500' : ''
-                        } ${tema.input}`}
-                        placeholder="Digite o código de barras"
-                      />
-                      {formErrors.codigoBarras && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.codigoBarras}</p>
-                      )}
-                    </div>
-
-                    {/* Valor de Custo */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Valor de Custo *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          R$
-                        </span>
-                        <input
-                          type="text"
-                          value={formData.valorCusto}
-                          onChange={(e) => setFormData(prev => ({ 
-                            ...prev, 
-                            valorCusto: formatarMoedaInput(e.target.value)
-                          }))}
-                          className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                            formErrors.valorCusto ? 'border-red-500' : ''
-                          } ${tema.input}`}
-                          placeholder="0,00"
-                        />
-                      </div>
-                      {formErrors.valorCusto && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
-                      )}
-                    </div>
-
-                    {/* Valor de Venda */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Valor de Venda *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                          R$
-                        </span>
-                        <input
-                          type="text"
-                          value={formData.valorVenda}
-                          onChange={(e) => setFormData(prev => ({ 
-                            ...prev, 
-                            valorVenda: formatarMoedaInput(e.target.value)
-                          }))}
-                          className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                            formErrors.valorVenda ? 'border-red-500' : ''
-                          } ${tema.input}`}
-                          placeholder="0,00"
-                        />
-                      </div>
-                      {formErrors.valorVenda && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
-                      )}
-                    </div>
-
-                    {/* Estoque */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Estoque Atual
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.estoque}
-                        onChange={(e) => setFormData(prev => ({ ...prev, estoque: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.estoque ? 'border-red-500' : ''
-                        } ${tema.input}`}
-                        placeholder="0"
-                      />
-                      {formErrors.estoque && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
-                      )}
-                    </div>
-
-                    {/* Estoque Mínimo */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Estoque Mínimo
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.estoqueMinimo}
-                        onChange={(e) => setFormData(prev => ({ ...prev, estoqueMinimo: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          formErrors.estoqueMinimo ? 'border-red-500' : ''
-                        } ${tema.input}`}
-                        placeholder="1"
-                      />
-                      {formErrors.estoqueMinimo && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
-                      )}
-                    </div>
-
-                    {/* Descrição */}
-                    <div className="md:col-span-2">
-                      <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                        Descrição
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={formData.descricao}
-                        onChange={(e) => setFormData(prev => ({ ...prev, descricao: e.target.value }))}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
-                        placeholder="Digite uma descrição detalhada do produto"
-                      />
-                    </div>
-
-                    {/* Status */}
-                    <div className="md:col-span-2">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={formData.ativo}
-                          onChange={(e) => setFormData(prev => ({ ...prev, ativo: e.target.checked }))}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <span className={`ml-2 text-sm ${tema.texto}`}>
-                          Produto ativo
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </form>
-              </div>
-
-              <div className={`${tema.fundo} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
-                <button
-                  onClick={salvarProduto}
-                  disabled={salvando}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-                >
-                  {salvando ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Salvando...
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <Save className="mr-2 h-4 w-4" />
-                      {produtoEditando ? 'Atualizar' : 'Criar'}
-                    </div>
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Categoria *
+                  </label>
+                  <select
+                    value={formData.categoria}
+                    onChange={(e) => atualizarCampo('categoria', e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.categoria ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categoriasDisponiveis.map(categoria => (
+                      <option key={categoria.id} value={categoria.nome}>
+                        {categoria.nome}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.categoria && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.categoria}</p>
                   )}
-                </button>
-                <button
-                  onClick={fecharModal}
-                  disabled={salvando}
-                  className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm`}
-                >
-                  Cancelar
-                </button>
+                </div>
               </div>
+
+              {/* Valores */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Valor de Custo *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.valorCusto}
+                    onChange={(e) => atualizarCampo('valorCusto', formatarMoeda(parseFloat(limparFormatacao(e.target.value)) || 0))}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.valorCusto ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                    placeholder="R$ 0,00"
+                  />
+                  {formErrors.valorCusto && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Valor de Venda *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.valorVenda}
+                    onChange={(e) => atualizarCampo('valorVenda', formatarMoeda(parseFloat(limparFormatacao(e.target.value)) || 0))}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.valorVenda ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                    placeholder="R$ 0,00"
+                  />
+                  {formErrors.valorVenda && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Estoque */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Estoque Atual *
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.estoque}
+                    onChange={(e) => atualizarCampo('estoque', e.target.value)}
+                    min="0"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.estoque ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                    placeholder="0"
+                  />
+                  {formErrors.estoque && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                    Estoque Mínimo *
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.estoqueMinimo}
+                    onChange={(e) => atualizarCampo('estoqueMinimo', e.target.value)}
+                    min="1"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      formErrors.estoqueMinimo ? 'border-red-500' : ''
+                    } ${tema.input}`}
+                    placeholder="1"
+                  />
+                  {formErrors.estoqueMinimo && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="ativo"
+                  checked={formData.ativo}
+                  onChange={(e) => atualizarCampo('ativo', e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="ativo" className={`ml-2 text-sm ${tema.texto}`}>
+                  Produto ativo
+                </label>
+              </div>
+
+              {/* Margem de Lucro Preview */}
+              {formData.valorCusto && formData.valorVenda && (
+                <div className={`p-3 rounded-md bg-blue-50 border border-blue-200`}>
+                  <div className="flex items-center">
+                    <BarChart3 className="h-5 w-5 text-blue-600 mr-2" />
+                    <span className="text-sm font-medium text-blue-800">
+                      Margem de Lucro: {calcularMargem(
+                        parseFloat(limparFormatacao(formData.valorCusto)),
+                        parseFloat(limparFormatacao(formData.valorVenda))
+                      ).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+              <button
+                onClick={fecharModal}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarProduto}
+                disabled={salvando}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {salvando ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    {produtoEditando ? 'Atualizar' : 'Criar'} Produto
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de Exclusão */}
+      {/* Modal de Confirmação de Exclusão */}
       {modalExclusaoAberto && produtoParaExcluir && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-            
-            <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
-              <div className={`${tema.papel} px-4 pt-5 pb-4 sm:p-6 sm:pb-4`}>
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <AlertTriangle className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
-                      Excluir Produto
-                    </h3>
-                    <div className="mt-2">
-                      <p className={`text-sm ${tema.textoSecundario}`}>
-                        Tem certeza que deseja excluir o produto <strong>{produtoParaExcluir.nome}</strong>? 
-                        Esta ação não pode ser desfeita.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-md`}>
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+                <h3 className={`text-lg font-semibold ${tema.texto}`}>
+                  Confirmar Exclusão
+                </h3>
               </div>
-              <div className={`${tema.fundo} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
+              <p className={`${tema.textoSecundario} mb-6`}>
+                Tem certeza que deseja excluir o produto "{produtoParaExcluir.nome}"? 
+                Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex items-center justify-end space-x-3">
                 <button
-                  onClick={excluirProduto}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Excluir
-                </button>
-                <button
-                  onClick={() => {
-                    setModalExclusaoAberto(false);
-                    setProdutoParaExcluir(null);
-                  }}
-                  className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm`}
+                  onClick={() => setModalExclusaoAberto(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                 >
                   Cancelar
+                </button>
+                <button
+                  onClick={excluirProduto}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                >
+                  Excluir
                 </button>
               </div>
             </div>
@@ -991,153 +938,97 @@ export const TelaProdutos: React.FC = () => {
 
       {/* Modal de Detalhes */}
       {modalDetalhesAberto && produtoDetalhes && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setModalDetalhesAberto(false)}></div>
-            
-            <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-              <div className={`${tema.papel} px-4 pt-5 pb-4 sm:p-6 sm:pb-4`}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto}`}>
-                    Detalhes do Produto
-                  </h3>
-                  <button
-                    onClick={() => setModalDetalhesAberto(false)}
-                    className={`${tema.textoSecundario} hover:${tema.texto}`}
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`${tema.papel} rounded-lg shadow-xl w-full max-w-lg`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className={`text-lg font-semibold ${tema.texto}`}>
+                Detalhes do Produto
+              </h3>
+              <button
+                onClick={() => setModalDetalhesAberto(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Nome:</span>
+                  <p className={`${tema.texto}`}>{produtoDetalhes.nome}</p>
                 </div>
-
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Nome
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {produtoDetalhes.nome}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Categoria
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {produtoDetalhes.categoria}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Código de Barras
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {produtoDetalhes.codigoBarras || 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Status
-                      </label>
-                      <span className={`mt-1 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        produtoDetalhes.ativo 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {produtoDetalhes.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Valor de Custo
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {formatarMoeda(produtoDetalhes.valorCusto)}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Valor de Venda
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {formatarMoeda(produtoDetalhes.valorVenda)}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Margem de Lucro
-                      </label>
-                      <p className={`mt-1 text-sm text-green-600`}>
-                        {calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda).toFixed(2)}%
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Data de Cadastro
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {new Date(produtoDetalhes.dataCadastro).toLocaleDateString('pt-BR')}
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Estoque Atual
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {formatarNumero(produtoDetalhes.estoque)} unidades
-                      </p>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Estoque Mínimo
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {formatarNumero(produtoDetalhes.estoqueMinimo)} unidades
-                      </p>
-                    </div>
-                  </div>
-
-                  {produtoDetalhes.descricao && (
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.textoSecundario}`}>
-                        Descrição
-                      </label>
-                      <p className={`mt-1 text-sm ${tema.texto}`}>
-                        {produtoDetalhes.descricao}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Alertas */}
-                  {produtoDetalhes.estoque <= produtoDetalhes.estoqueMinimo && (
-                    <div className="flex items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
-                      <span className="text-sm text-yellow-800">
-                        Estoque baixo! Produto precisa de reposição.
-                      </span>
-                    </div>
-                  )}
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Categoria:</span>
+                  <p className={`${tema.texto}`}>{produtoDetalhes.categoria}</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Código de Barras:</span>
+                  <p className={`${tema.texto}`}>{produtoDetalhes.codigoBarras}</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Status:</span>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    produtoDetalhes.ativo ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {produtoDetalhes.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor de Custo:</span>
+                  <p className={`${tema.texto} font-medium`}>{formatarMoeda(produtoDetalhes.valorCusto)}</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor de Venda:</span>
+                  <p className={`${tema.texto} font-medium`}>{formatarMoeda(produtoDetalhes.valorVenda)}</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Atual:</span>
+                  <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoque)} unidades</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Mínimo:</span>
+                  <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoqueMinimo)} unidades</p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Margem de Lucro:</span>
+                  <p className={`font-medium ${calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda) >= 50 ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda).toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Data de Cadastro:</span>
+                  <p className={`${tema.texto}`}>
+                    {new Date(produtoDetalhes.dataCadastro).toLocaleDateString('pt-BR')}
+                  </p>
                 </div>
               </div>
 
-              <div className={`${tema.fundo} px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse`}>
-                <button
-                  onClick={() => {
-                    setModalDetalhesAberto(false);
-                    abrirModal(produtoDetalhes);
-                  }}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  <Edit className="mr-2 h-4 w-4" />
-                  Editar
-                </button>
-                <button
-                  onClick={() => setModalDetalhesAberto(false)}
-                  className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm`}
-                >
-                  Fechar
-                </button>
-              </div>
+              {produtoDetalhes.descricao && (
+                <div>
+                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Descrição:</span>
+                  <p className={`${tema.texto} mt-1`}>{produtoDetalhes.descricao}</p>
+                </div>
+              )}
+
+              {/* Alertas */}
+              {produtoDetalhes.estoque <= produtoDetalhes.estoqueMinimo && (
+                <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-md">
+                  <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                  <span className="text-sm text-red-800">
+                    Estoque baixo! Considere reabastecer este produto.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end p-6 border-t border-gray-200">
+              <button
+                onClick={() => setModalDetalhesAberto(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
