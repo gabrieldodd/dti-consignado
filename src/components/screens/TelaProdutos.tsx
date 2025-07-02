@@ -59,7 +59,7 @@ const FORM_INICIAL: ProdutoForm = {
   valorCusto: '0,00',
   valorVenda: '0,00',
   estoque: '0',
-  estoqueMinimo: '1',
+  estoqueMinimo: '0',
   ativo: true
 };
 
@@ -71,11 +71,13 @@ export const TelaProdutos: React.FC = () => {
     setProdutos,
     categorias,
     mostrarMensagem,
-    tipoUsuario 
+    tipoUsuario,
+    controleEstoqueHabilitado = true,
+    setControleEstoqueHabilitado
   } = useAppContext();
   
   const { formatarMoeda, formatarNumero } = useFormatters();
-  const { validarObrigatorio, validarNumeroPositivo, validarCodigoBarras } = useValidation();
+  const { validarObrigatorio, validarNumeroPositivo } = useValidation();
 
   // Estados Locais
   const [modalAberto, setModalAberto] = useState(false);
@@ -111,23 +113,38 @@ export const TelaProdutos: React.FC = () => {
         (filtroStatus === 'ativo' && produto.ativo) ||
         (filtroStatus === 'inativo' && !produto.ativo);
 
-      const matchEstoque = filtroEstoque === 'todos' ||
+      // Aplicar filtro de estoque apenas se o controle estiver habilitado
+      const matchEstoque = !controleEstoqueHabilitado || filtroEstoque === 'todos' ||
         (filtroEstoque === 'baixo' && produto.estoque <= produto.estoqueMinimo) ||
         (filtroEstoque === 'normal' && produto.estoque > produto.estoqueMinimo);
 
       return matchTexto && matchCategoria && matchStatus && matchEstoque;
     });
-  }, [produtos, buscaTexto, filtroCategoria, filtroStatus, filtroEstoque]);
+  }, [produtos, buscaTexto, filtroCategoria, filtroStatus, filtroEstoque, controleEstoqueHabilitado]);
 
   // Estatísticas
   const estatisticas = useMemo(() => {
     const total = produtos.length;
     const ativos = produtos.filter(p => p.ativo).length;
     const inativos = produtos.filter(p => !p.ativo).length;
-    const estoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length;
-    const valorTotalEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => acc + (p.valorCusto * p.estoque), 0);
-    const valorTotalVenda = produtos.filter(p => p.ativo).reduce((acc, p) => acc + (p.valorVenda * p.estoque), 0);
-    const itensEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => acc + p.estoque, 0);
+    
+    // Calcular estatísticas de estoque apenas se o controle estiver habilitado
+    const estoqueBaixo = controleEstoqueHabilitado 
+      ? produtos.filter(p => p.ativo && p.estoque <= p.estoqueMinimo).length 
+      : 0;
+      
+    const itensEstoque = controleEstoqueHabilitado 
+      ? produtos.filter(p => p.ativo).reduce((acc, p) => acc + p.estoque, 0)
+      : 0;
+    
+    // Valores sempre calculados baseados no custo unitário, não no estoque
+    const valorTotalEstoque = produtos.filter(p => p.ativo).reduce((acc, p) => {
+      return acc + (controleEstoqueHabilitado ? (p.valorCusto * p.estoque) : p.valorCusto);
+    }, 0);
+    
+    const valorTotalVenda = produtos.filter(p => p.ativo).reduce((acc, p) => {
+      return acc + (controleEstoqueHabilitado ? (p.valorVenda * p.estoque) : p.valorVenda);
+    }, 0);
 
     return {
       total,
@@ -138,7 +155,7 @@ export const TelaProdutos: React.FC = () => {
       valorTotalVenda,
       itensEstoque
     };
-  }, [produtos]);
+  }, [produtos, controleEstoqueHabilitado]);
 
   // Categorias disponíveis
   const categoriasDisponiveis = useMemo(() => {
@@ -226,34 +243,39 @@ export const TelaProdutos: React.FC = () => {
 
     if (!validarObrigatorio(formData.codigoBarras)) {
       novosErros.codigoBarras = 'Código de barras é obrigatório';
-    } else if (!validarCodigoBarras(formData.codigoBarras)) {
-      novosErros.codigoBarras = 'Código de barras deve ter entre 8 e 14 dígitos';
     }
 
-    // Validar valores numéricos - conversão melhorada
+    // Validar valores monetários
     const valorCusto = parseFloat(formData.valorCusto.replace(',', '.')) || 0;
-    const valorVenda = parseFloat(formData.valorVenda.replace(',', '.')) || 0;
-    const estoque = parseInt(formData.estoque) || 0;
-    const estoqueMinimo = parseInt(formData.estoqueMinimo) || 0;
+    const valorVenda = formData.valorVenda ? parseFloat(formData.valorVenda.replace(',', '.')) || 0 : 0;
 
-    if (!validarNumeroPositivo(valorCusto)) {
-      novosErros.valorCusto = 'Valor de custo deve ser maior que zero';
+    // Valor de custo obrigatório e não pode ser negativo
+    if (valorCusto < 0) {
+      novosErros.valorCusto = 'Valor de custo não pode ser negativo';
     }
 
-    if (!validarNumeroPositivo(valorVenda)) {
-      novosErros.valorVenda = 'Valor de venda deve ser maior que zero';
+    // Valor de venda opcional, mas se preenchido não pode ser negativo
+    if (valorVenda < 0) {
+      novosErros.valorVenda = 'Valor de venda não pode ser negativo';
     }
 
-    if (valorVenda <= valorCusto) {
-      novosErros.valorVenda = 'Valor de venda deve ser maior que o custo';
+    // Se valor de venda foi preenchido e é menor que custo, avisar
+    if (valorVenda > 0 && valorVenda < valorCusto) {
+      novosErros.valorVenda = 'Valor de venda menor que o custo resultará em prejuízo';
     }
 
-    if (isNaN(estoque) || estoque < 0) {
-      novosErros.estoque = 'Estoque deve ser um número válido';
-    }
+    // Validar campos de estoque apenas se o controle estiver habilitado
+    if (controleEstoqueHabilitado) {
+      const estoque = parseInt(formData.estoque) || 0;
+      const estoqueMinimo = parseInt(formData.estoqueMinimo) || 0;
 
-    if (isNaN(estoqueMinimo) || estoqueMinimo < 1) {
-      novosErros.estoqueMinimo = 'Estoque mínimo deve ser pelo menos 1';
+      if (isNaN(estoque) || estoque < 0) {
+        novosErros.estoque = 'Estoque deve ser um número válido';
+      }
+
+      if (isNaN(estoqueMinimo) || estoqueMinimo < 0) {
+        novosErros.estoqueMinimo = 'Estoque mínimo deve ser um número válido';
+      }
     }
 
     // Verificar código de barras duplicado
@@ -268,7 +290,7 @@ export const TelaProdutos: React.FC = () => {
 
     setFormErrors(novosErros);
     return Object.keys(novosErros).length === 0;
-  }, [formData, produtos, produtoEditando, validarObrigatorio, validarCodigoBarras, validarNumeroPositivo]);
+  }, [formData, produtos, produtoEditando, validarObrigatorio, controleEstoqueHabilitado]);
 
   // Salvar produto
   const salvarProduto = useCallback(async () => {
@@ -284,8 +306,9 @@ export const TelaProdutos: React.FC = () => {
         categoria: formData.categoria,
         valorCusto: parseFloat(formData.valorCusto.replace(',', '.')) || 0,
         valorVenda: parseFloat(formData.valorVenda.replace(',', '.')) || 0,
-        estoque: parseInt(formData.estoque) || 0,
-        estoqueMinimo: parseInt(formData.estoqueMinimo) || 0,
+        // Se controle de estoque estiver desabilitado, usar valores padrão
+        estoque: controleEstoqueHabilitado ? (parseInt(formData.estoque) || 0) : 0,
+        estoqueMinimo: controleEstoqueHabilitado ? (parseInt(formData.estoqueMinimo) || 1) : 1,
         ativo: formData.ativo
       };
 
@@ -315,7 +338,7 @@ export const TelaProdutos: React.FC = () => {
     } finally {
       setSalvando(false);
     }
-  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal]);
+  }, [formData, produtoEditando, produtos, validarFormulario, setProdutos, mostrarMensagem, fecharModal, controleEstoqueHabilitado]);
 
   // Confirmar exclusão
   const confirmarExclusao = useCallback((produto: Produto) => {
@@ -368,20 +391,50 @@ export const TelaProdutos: React.FC = () => {
             <p className={`${tema.textoSecundario}`}>
               Gerencie o catálogo de produtos da loja
             </p>
+            {!controleEstoqueHabilitado && (
+              <div className="mt-2 flex items-center text-sm text-amber-600">
+                <AlertTriangle className="h-4 w-4 mr-1" />
+                Controle de estoque desabilitado
+              </div>
+            )}
           </div>
-          {podeGerenciar && (
-            <button
-              onClick={() => abrirModal()}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Novo Produto
-            </button>
-          )}
+          <div className="flex items-center space-x-4">
+            {/* Toggle Controle de Estoque */}
+            {tipoUsuario === 'admin' && setControleEstoqueHabilitado && (
+              <div className="flex items-center space-x-2">
+                <label className={`text-sm font-medium ${tema.texto}`}>
+                  Controle de Estoque
+                </label>
+                <button
+                  onClick={() => setControleEstoqueHabilitado(!controleEstoqueHabilitado)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    controleEstoqueHabilitado ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                  title={controleEstoqueHabilitado ? 'Desabilitar controle de estoque' : 'Habilitar controle de estoque'}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      controleEstoqueHabilitado ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+            
+            {podeGerenciar && (
+              <button
+                onClick={() => abrirModal()}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Produto
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4 mb-6">
+        <div className={`grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6`}>
           <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
             <div className="flex items-center justify-between">
               <div>
@@ -421,30 +474,6 @@ export const TelaProdutos: React.FC = () => {
           <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
-                <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {formatarNumero(estatisticas.estoqueBaixo)}
-                </p>
-              </div>
-              <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`} />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Itens em Estoque</p>
-                <p className={`text-xl font-bold ${tema.texto}`}>
-                  {formatarNumero(estatisticas.itensEstoque)}
-                </p>
-              </div>
-              <Hash className="h-8 w-8 text-purple-600" />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
                 <p className={`text-sm ${tema.textoSecundario}`}>Valor Custo</p>
                 <p className={`text-lg font-bold text-orange-600`}>
                   {formatarMoeda(estatisticas.valorTotalEstoque)}
@@ -465,11 +494,39 @@ export const TelaProdutos: React.FC = () => {
               <TrendingUp className="h-8 w-8 text-green-600" />
             </div>
           </div>
+
+          {controleEstoqueHabilitado && (
+            <>
+              <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
+                    <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatarNumero(estatisticas.estoqueBaixo)}
+                    </p>
+                  </div>
+                  <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-green-600'}`} />
+                </div>
+              </div>
+
+              <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm ${tema.textoSecundario}`}>Itens em Estoque</p>
+                    <p className={`text-xl font-bold ${tema.texto}`}>
+                      {formatarNumero(estatisticas.itensEstoque)}
+                    </p>
+                  </div>
+                  <Hash className="h-8 w-8 text-purple-600" />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Filtros */}
         <div className={`${tema.papel} p-4 rounded-lg shadow-sm border ${tema.borda} mb-6`}>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-${controleEstoqueHabilitado ? '5' : '4'} gap-4`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
@@ -504,15 +561,17 @@ export const TelaProdutos: React.FC = () => {
               <option value="inativo">Inativos</option>
             </select>
 
-            <select
-              value={filtroEstoque}
-              onChange={(e) => setFiltroEstoque(e.target.value)}
-              className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
-            >
-              <option value="todos">Todos os Estoques</option>
-              <option value="baixo">Estoque Baixo</option>
-              <option value="normal">Estoque Normal</option>
-            </select>
+            {controleEstoqueHabilitado && (
+              <select
+                value={filtroEstoque}
+                onChange={(e) => setFiltroEstoque(e.target.value)}
+                className={`px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.input}`}
+              >
+                <option value="todos">Todos os Estoques</option>
+                <option value="baixo">Estoque Baixo</option>
+                <option value="normal">Estoque Normal</option>
+              </select>
+            )}
 
             <div className={`flex items-center justify-end ${tema.textoSecundario}`}>
               <span className="text-sm">
@@ -557,9 +616,11 @@ export const TelaProdutos: React.FC = () => {
                     <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
                       Categoria
                     </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Estoque
-                    </th>
+                    {controleEstoqueHabilitado && (
+                      <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
+                        Estoque
+                      </th>
+                    )}
                     <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
                       Valores
                     </th>
@@ -577,7 +638,8 @@ export const TelaProdutos: React.FC = () => {
                 <tbody className="divide-y divide-gray-200">
                   {produtosFiltrados.map((produto) => {
                     const margem = calcularMargem(produto.valorCusto, produto.valorVenda);
-                    const estoqueStatus = produto.estoque <= produto.estoqueMinimo ? 'baixo' : 'normal';
+                    const estoqueStatus = controleEstoqueHabilitado ? 
+                      (produto.estoque <= produto.estoqueMinimo ? 'baixo' : 'normal') : 'normal';
 
                     return (
                       <tr key={produto.id} className={`${tema.hover}`}>
@@ -604,21 +666,23 @@ export const TelaProdutos: React.FC = () => {
                             {produto.categoria}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="flex-1">
-                              <div className={`text-sm font-medium ${estoqueStatus === 'baixo' ? 'text-red-600' : tema.texto}`}>
-                                {formatarNumero(produto.estoque)} unidades
+                        {controleEstoqueHabilitado && (
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="flex-1">
+                                <div className={`text-sm font-medium ${estoqueStatus === 'baixo' ? 'text-red-600' : tema.texto}`}>
+                                  {formatarNumero(produto.estoque)} unidades
+                                </div>
+                                <div className={`text-xs ${tema.textoSecundario}`}>
+                                  Mín: {formatarNumero(produto.estoqueMinimo)}
+                                </div>
                               </div>
-                              <div className={`text-xs ${tema.textoSecundario}`}>
-                                Mín: {formatarNumero(produto.estoqueMinimo)}
-                              </div>
+                              {estoqueStatus === 'baixo' && (
+                                <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
+                              )}
                             </div>
-                            {estoqueStatus === 'baixo' && (
-                              <AlertTriangle className="h-4 w-4 text-red-500 ml-2" />
-                            )}
-                          </div>
-                        </td>
+                          </td>
+                        )}
                         <td className="px-6 py-4">
                           <div className="text-sm">
                             <div className={`font-medium ${tema.texto}`}>
@@ -837,45 +901,55 @@ export const TelaProdutos: React.FC = () => {
               </div>
 
               {/* Estoque */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Estoque Atual *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.estoque}
-                    onChange={(e) => atualizarCampo('estoque', e.target.value)}
-                    min="0"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.estoque ? 'border-red-500' : ''
-                    } ${tema.input}`}
-                    placeholder="0"
-                  />
-                  {formErrors.estoque && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
-                  )}
-                </div>
+              {controleEstoqueHabilitado ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                      Estoque Atual
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.estoque}
+                      onChange={(e) => atualizarCampo('estoque', e.target.value)}
+                      min="0"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.estoque ? 'border-red-500' : ''
+                      } ${tema.input}`}
+                      placeholder="0"
+                    />
+                    {formErrors.estoque && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
+                    )}
+                  </div>
 
-                <div>
-                  <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
-                    Estoque Mínimo *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.estoqueMinimo}
-                    onChange={(e) => atualizarCampo('estoqueMinimo', e.target.value)}
-                    min="1"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors.estoqueMinimo ? 'border-red-500' : ''
-                    } ${tema.input}`}
-                    placeholder="1"
-                  />
-                  {formErrors.estoqueMinimo && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
-                  )}
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.texto} mb-2`}>
+                      Estoque Mínimo
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.estoqueMinimo}
+                      onChange={(e) => atualizarCampo('estoqueMinimo', e.target.value)}
+                      min="0"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.estoqueMinimo ? 'border-red-500' : ''
+                      } ${tema.input}`}
+                      placeholder="0"
+                    />
+                    {formErrors.estoqueMinimo && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mr-2" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800">Controle de estoque desabilitado</p>
+                    <p className="text-amber-700">Os campos de estoque não são obrigatórios quando o controle está desabilitado.</p>
+                  </div>
+                </div>
+              )}
 
               {/* Status */}
               <div className="flex items-center">
@@ -1016,14 +1090,18 @@ export const TelaProdutos: React.FC = () => {
                   <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor de Venda:</span>
                   <p className={`${tema.texto} font-medium`}>{formatarMoeda(produtoDetalhes.valorVenda)}</p>
                 </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Atual:</span>
-                  <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoque)} unidades</p>
-                </div>
-                <div>
-                  <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Mínimo:</span>
-                  <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoqueMinimo)} unidades</p>
-                </div>
+                {controleEstoqueHabilitado && (
+                  <>
+                    <div>
+                      <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Atual:</span>
+                      <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoque)} unidades</p>
+                    </div>
+                    <div>
+                      <span className={`text-sm font-medium ${tema.textoSecundario}`}>Estoque Mínimo:</span>
+                      <p className={`${tema.texto} font-medium`}>{formatarNumero(produtoDetalhes.estoqueMinimo)} unidades</p>
+                    </div>
+                  </>
+                )}
                 <div>
                   <span className={`text-sm font-medium ${tema.textoSecundario}`}>Margem de Lucro:</span>
                   <p className={`font-medium ${calcularMargem(produtoDetalhes.valorCusto, produtoDetalhes.valorVenda) >= 50 ? 'text-green-600' : 'text-yellow-600'}`}>
@@ -1046,7 +1124,7 @@ export const TelaProdutos: React.FC = () => {
               )}
 
               {/* Alertas */}
-              {produtoDetalhes.estoque <= produtoDetalhes.estoqueMinimo && (
+              {controleEstoqueHabilitado && produtoDetalhes.estoque <= produtoDetalhes.estoqueMinimo && (
                 <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-md">
                   <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
                   <span className="text-sm text-red-800">

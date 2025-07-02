@@ -191,6 +191,10 @@ interface AppContextType {
   setCategorias: React.Dispatch<React.SetStateAction<any[]>>;
   setConsignacoes: React.Dispatch<React.SetStateAction<any[]>>;
   
+  // Configurações do Sistema
+  controleEstoqueHabilitado: boolean;
+  setControleEstoqueHabilitado: React.Dispatch<React.SetStateAction<boolean>>;
+  
   // Utilitários
   mostrarMensagem: (tipo: TipoMensagem, texto: string) => void;
   cookies: CookieManager;
@@ -222,6 +226,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     // Carregar tema salvo dos cookies na inicialização
     const temaSalvo = getCookie('sistema_tema');
     return temaSalvo === 'escuro';
+  });
+
+  // Estado para controle de estoque
+  const [controleEstoqueHabilitado, setControleEstoqueHabilitado] = useState(() => {
+    // Carregar configuração de estoque salva dos cookies
+    const controleEstoqueSalvo = getCookie('sistema_controle_estoque');
+    return controleEstoqueSalvo !== 'false'; // Default: habilitado
   });
 
   const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
@@ -264,17 +275,22 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCookie('sistema_tema', temaEscuro ? 'escuro' : 'claro', 365); // Salva por 1 ano
   }, [temaEscuro, setCookie]);
 
+  // Salvar configuração de controle de estoque sempre que mudar
+  useEffect(() => {
+    setCookie('sistema_controle_estoque', controleEstoqueHabilitado.toString(), 365); // Salva por 1 ano
+  }, [controleEstoqueHabilitado, setCookie]);
+
   // Função para salvar todas as preferências do usuário
   const salvarPreferencias = useCallback(() => {
     const preferencias = {
       tema: temaEscuro ? 'escuro' : 'claro',
-      ultimaAtividade: new Date().toISOString()
+      controleEstoque: controleEstoqueHabilitado,
+      timestamp: new Date().toISOString()
     };
     
     setCookie('sistema_preferencias', JSON.stringify(preferencias), 365);
-    
-    console.log('Preferências salvas:', preferencias);
-  }, [temaEscuro, setCookie]);
+    mostrarMensagem('success', 'Preferências salvas com sucesso!');
+  }, [temaEscuro, controleEstoqueHabilitado, setCookie, mostrarMensagem]);
 
   // Função para carregar preferências salvas
   const carregarPreferencias = useCallback(() => {
@@ -282,16 +298,24 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       const preferenciasSalvas = getCookie('sistema_preferencias');
       if (preferenciasSalvas) {
         const preferencias = JSON.parse(preferenciasSalvas);
-        console.log('Preferências carregadas:', preferencias);
-        return preferencias;
+        
+        if (preferencias.tema) {
+          setTemaEscuro(preferencias.tema === 'escuro');
+        }
+        
+        if (typeof preferencias.controleEstoque === 'boolean') {
+          setControleEstoqueHabilitado(preferencias.controleEstoque);
+        }
+        
+        mostrarMensagem('success', 'Preferências carregadas!');
       }
     } catch (error) {
       console.error('Erro ao carregar preferências:', error);
+      mostrarMensagem('error', 'Erro ao carregar preferências salvas');
     }
-    return null;
-  }, [getCookie]);
+  }, [getCookie, mostrarMensagem]);
 
-  // Limpar timeout da mensagem quando componente é desmontado
+  // Limpar timeout das mensagens ao desmontar
   useEffect(() => {
     return () => {
       if (mensagemAtual?.timeout) {
@@ -300,14 +324,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     };
   }, [mensagemAtual]);
 
-  // Valor do contexto memoizado para performance
-  const value = useMemo(() => ({
+  const contextValue: AppContextType = {
     // Tema
     temaEscuro,
-    setTemaEscuro: (tema: boolean) => {
-      setTemaEscuro(tema);
-      setCookie('sistema_tema', tema ? 'escuro' : 'claro', 365);
-    },
+    setTemaEscuro,
     tema,
     
     // Usuário
@@ -326,73 +346,40 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCategorias,
     setConsignacoes,
     
+    // Configurações do Sistema
+    controleEstoqueHabilitado,
+    setControleEstoqueHabilitado,
+    
     // Utilitários
     mostrarMensagem,
     cookies,
     salvarPreferencias,
     carregarPreferencias
-  }), [
-    temaEscuro,
-    tema,
-    usuarioLogado,
-    tipoUsuario,
-    vendedores,
-    produtos,
-    categorias,
-    consignacoes,
-    mostrarMensagem,
-    cookies,
-    salvarPreferencias,
-    carregarPreferencias,
-    setCookie
-  ]);
+  };
 
   return (
-    <AppContext.Provider value={value}>
+    <AppContext.Provider value={contextValue}>
       {children}
       
-      {/* Componente de Mensagem Global */}
+      {/* Renderizar mensagens */}
       {mensagemAtual && (
-        <div className={`
-          fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border max-w-sm
-          transform transition-all duration-300 ease-in-out
-          ${mensagemAtual.tipo === 'success' 
-            ? 'bg-green-50 text-green-800 border-green-200' 
-            : 'bg-red-50 text-red-800 border-red-200'
-          }
-        `}>
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
+        <div className="fixed top-4 right-4 z-50">
+          <div className={`px-4 py-3 rounded-lg shadow-lg max-w-sm ${
+            mensagemAtual.tipo === 'success' 
+              ? 'bg-green-100 border border-green-500 text-green-700' 
+              : 'bg-red-100 border border-red-500 text-red-700'
+          }`}>
+            <div className="flex items-center">
               {mensagemAtual.tipo === 'success' ? (
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
               ) : (
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
               )}
-            </div>
-            <div className="ml-3 flex-1">
-              <p className="text-sm font-medium">
-                {mensagemAtual.texto}
-              </p>
-            </div>
-            <div className="ml-4 flex-shrink-0">
-              <button
-                onClick={() => setMensagemAtual(null)}
-                className={`
-                  inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2
-                  ${mensagemAtual.tipo === 'success' 
-                    ? 'text-green-500 hover:bg-green-100 focus:ring-green-600' 
-                    : 'text-red-500 hover:bg-red-100 focus:ring-red-600'
-                  }
-                `}
-              >
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
+              <span className="text-sm font-medium">{mensagemAtual.texto}</span>
             </div>
           </div>
         </div>

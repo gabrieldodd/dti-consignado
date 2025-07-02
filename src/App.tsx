@@ -8,7 +8,7 @@ import { TelaVendedores } from './components/screens/TelaVendedores';
 import { TelaProdutos } from './components/screens/TelaProdutos';
 import { MenuLateral } from './components/layout/MenuLateral';
 
-// Componentes de tela (temporários - serão criados depois)
+// Componentes de tela temporários (serão criados depois)
 const TelaConsignacoes = () => {
   const { tema } = useAppContext();
   return (
@@ -20,7 +20,6 @@ const TelaConsignacoes = () => {
     </div>
   );
 };
-
 
 const TelaCategorias = () => {
   const { tema } = useAppContext();
@@ -54,52 +53,7 @@ const AppContent: React.FC = () => {
   const [telaAtiva, setTelaAtiva] = useState('dashboard');
   const [menuAberto, setMenuAberto] = useState(false);
   const [verificandoLogin, setVerificandoLogin] = useState(true);
-  // NOVO: State para controlar logout manual
   const [logoutManual, setLogoutManual] = useState(false);
-
-  // Verificar se há login salvo válido na inicialização - CORRIGIDO
-  useEffect(() => {
-    const verificarLoginSalvo = async () => {
-      try {
-        // NÃO fazer auto-login se foi logout manual recente
-        if (logoutManual) {
-          console.log('Logout manual detectado, pulando auto-login');
-          setLogoutManual(false); // Reset do flag
-          setVerificandoLogin(false);
-          return;
-        }
-
-        const preferencias = {
-          login: cookies.getCookie('preferencias_login'),
-          senha: cookies.getCookie('preferencias_senha'),
-          autoLogin: cookies.getCookie('preferencias_auto_login') === 'true',
-          ultimoLogin: cookies.getCookie('preferencias_ultimo_login')
-        };
-
-        // Se tem credenciais salvas e auto-login habilitado
-        if (preferencias.autoLogin && preferencias.login && preferencias.senha) {
-          // Verificar se as credenciais ainda são válidas
-          const loginValido = await validarCredenciais(preferencias.login, preferencias.senha);
-          
-          if (loginValido) {
-            console.log('Login automático realizado com sucesso');
-          } else {
-            // Credenciais inválidas, limpar cookies
-            cookies.deleteCookie('preferencias_login');
-            cookies.deleteCookie('preferencias_senha');
-            cookies.deleteCookie('preferencias_auto_login');
-            mostrarMensagem('error', 'Credenciais salvas expiraram. Faça login novamente.');
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao verificar login salvo:', error);
-      } finally {
-        setVerificandoLogin(false);
-      }
-    };
-
-    verificarLoginSalvo();
-  }, [cookies, mostrarMensagem, logoutManual]); // IMPORTANTE: Adicionar logoutManual nas dependências
 
   // Função para validar credenciais
   const validarCredenciais = useCallback(async (login: string, senha: string): Promise<boolean> => {
@@ -126,7 +80,57 @@ const AppContent: React.FC = () => {
     return false;
   }, [vendedores, setUsuarioLogado, setTipoUsuario]);
 
-  // Função de login com persistência - CORRIGIDA
+  // Verificar se há login salvo válido na inicialização
+  useEffect(() => {
+    const verificarLoginSalvo = async () => {
+      try {
+        // Não fazer auto-login se foi logout manual recente
+        if (logoutManual) {
+          console.log('Logout manual detectado, pulando auto-login');
+          setLogoutManual(false);
+          setVerificandoLogin(false);
+          return;
+        }
+
+        const preferencias = {
+          login: cookies.getCookie('preferencias_login'),
+          senha: cookies.getCookie('preferencias_senha'),
+          autoLogin: cookies.getCookie('preferencias_auto_login') === 'true',
+          ultimoLogin: cookies.getCookie('preferencias_ultimo_login')
+        };
+
+        // Se tem credenciais salvas e auto-login habilitado
+        if (preferencias.autoLogin && preferencias.login && preferencias.senha) {
+          console.log('Tentando login automático...');
+          
+          // Verificar se as credenciais ainda são válidas
+          const loginValido = await validarCredenciais(preferencias.login, preferencias.senha);
+          
+          if (loginValido) {
+            console.log('Login automático realizado com sucesso');
+            mostrarMensagem('success', 'Login automático realizado!');
+            
+            // Atualizar timestamp de último login
+            cookies.setCookie('sistema_timestamp_login', new Date().toISOString(), 7);
+          } else {
+            // Credenciais inválidas, limpar cookies
+            cookies.deleteCookie('preferencias_login');
+            cookies.deleteCookie('preferencias_senha');
+            cookies.deleteCookie('preferencias_auto_login');
+            mostrarMensagem('error', 'Credenciais salvas expiraram. Faça login novamente.');
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar login salvo:', error);
+      } finally {
+        setVerificandoLogin(false);
+      }
+    };
+
+    verificarLoginSalvo();
+  }, [cookies, mostrarMensagem, logoutManual, validarCredenciais]);
+
+  // Função de login com persistência
   const fazerLogin = useCallback(async (login: string, senha: string, lembrar: boolean = false) => {
     try {
       // Reset do flag de logout manual quando faz login intencional
@@ -152,7 +156,6 @@ const AppContent: React.FC = () => {
         
         mostrarMensagem('success', 'Login realizado com sucesso!');
         
-        // Log para debug
         console.log('Login realizado:', { 
           login, 
           lembrar, 
@@ -174,12 +177,12 @@ const AppContent: React.FC = () => {
     }
   }, [validarCredenciais, mostrarMensagem, cookies, salvarPreferencias, setLogoutManual]);
 
-  // Função de logout com limpeza de preferências - CORRIGIDA
+  // Função de logout com limpeza de preferências
   const fazerLogout = useCallback(() => {
     try {
       console.log('Iniciando logout...');
       
-      // CRÍTICO: Marcar que foi logout manual para evitar auto-login
+      // Marcar que foi logout manual para evitar auto-login
       setLogoutManual(true);
       
       // Limpar dados do usuário
@@ -193,7 +196,7 @@ const AppContent: React.FC = () => {
       cookies.deleteCookie('sistema_usuario_nome');
       cookies.deleteCookie('sistema_timestamp_login');
       
-      // CRÍTICO: Sempre desabilitar auto-login no logout
+      // Sempre desabilitar auto-login no logout
       cookies.deleteCookie('preferencias_auto_login');
       
       // Verificar se deve manter credenciais salvas para próximo login manual
@@ -220,51 +223,37 @@ const AppContent: React.FC = () => {
     }
   }, [setUsuarioLogado, setTipoUsuario, setTelaAtiva, cookies, mostrarMensagem, setLogoutManual]);
 
-  // OPCIONAL: Função para logout completo (limpa tudo)
-  const fazerLogoutCompleto = useCallback(() => {
-    try {
-      console.log('Fazendo logout completo...');
-      
-      // Limpar todos os estados
-      setUsuarioLogado(null);
-      setTipoUsuario(null);
-      setTelaAtiva('dashboard');
-      setLogoutManual(true);
-      
-      // Limpar TODOS os cookies relacionados ao login
-      const cookiesParaLimpar = [
-        'sistema_usuario_id',
-        'sistema_tipo_usuario', 
-        'sistema_usuario_nome',
-        'sistema_timestamp_login',
-        'preferencias_login',
-        'preferencias_senha',
-        'preferencias_auto_login',
-        'preferencias_ultimo_login',
-        'preferencias_lembrar'
-      ];
-      
-      cookiesParaLimpar.forEach(cookie => {
-        cookies.deleteCookie(cookie);
-      });
-      
-      mostrarMensagem('success', 'Logout completo realizado!');
-      
-    } catch (error) {
-      console.error('Erro no logout completo:', error);
-    }
-  }, [setUsuarioLogado, setTipoUsuario, setTelaAtiva, setLogoutManual, cookies, mostrarMensagem]);
-
-  // Função para mudar tela
-  const mudarTela = useCallback((tela: string) => {
-    setTelaAtiva(tela);
-    setMenuAberto(false); // Fecha menu mobile ao navegar
+  // Verificar permissões da tela
+  const podeAcessarTela = useCallback((tela: string): boolean => {
+    if (!usuarioLogado) return false;
     
-    // Registrar navegação para analytics (futuro)
-    cookies.setCookie('sistema_ultima_tela', tela, 1);
-  }, [cookies]);
+    switch (tela) {
+      case 'vendedores':
+      case 'produtos':
+      case 'categorias':
+        return tipoUsuario === 'admin';
+      case 'consignacoes':
+      case 'dashboard':
+        return tipoUsuario === 'admin' || tipoUsuario === 'vendedor';
+      default:
+        return false;
+    }
+  }, [usuarioLogado, tipoUsuario]);
 
-  // Função para alternar tema com persistência
+  // Função para navegar entre telas
+  const navegarPara = useCallback((tela: string) => {
+    if (podeAcessarTela(tela) || tela === 'dashboard') {
+      setTelaAtiva(tela);
+      setMenuAberto(false);
+      
+      // Salvar última tela acessada
+      cookies.setCookie('sistema_ultima_tela', tela, 1);
+    } else {
+      mostrarMensagem('error', 'Você não tem permissão para acessar esta funcionalidade');
+    }
+  }, [podeAcessarTela, mostrarMensagem, cookies]);
+
+  // Função para alternar tema
   const toggleTema = useCallback(() => {
     const novoTema = !temaEscuro;
     setTemaEscuro(novoTema);
@@ -273,38 +262,27 @@ const AppContent: React.FC = () => {
     cookies.setCookie('sistema_tema', novoTema ? 'escuro' : 'claro', 365);
     
     mostrarMensagem('success', `Tema ${novoTema ? 'escuro' : 'claro'} ativado!`);
-    
-    console.log('Tema alterado:', { 
-      anterior: temaEscuro ? 'escuro' : 'claro',
-      novo: novoTema ? 'escuro' : 'claro',
-      timestamp: new Date().toISOString()
-    });
   }, [temaEscuro, setTemaEscuro, cookies, mostrarMensagem]);
 
-  // Função para controlar menu mobile
-  const toggleMenu = useCallback(() => {
-    setMenuAberto((prev: boolean) => !prev);
-  }, []);
+  // Renderizar tela ativa
+  const renderizarTela = useCallback(() => {
+    if (!usuarioLogado) return <Login onLogin={fazerLogin} />;
 
-  const fecharMenu = useCallback(() => {
-    setMenuAberto(false);
-  }, []);
-
-  // Renderizar conteúdo baseado na tela ativa
-  const renderConteudo = useCallback(() => {
     switch (telaAtiva) {
-      case 'consignacoes':
-        return <TelaConsignacoes />;
+      case 'dashboard':
+        return <Dashboard />;
       case 'vendedores':
-        return <TelaVendedores />;
+        return podeAcessarTela('vendedores') ? <TelaVendedores /> : <Dashboard />;
       case 'produtos':
-        return <TelaProdutos />;
+        return podeAcessarTela('produtos') ? <TelaProdutos /> : <Dashboard />;
       case 'categorias':
-        return <TelaCategorias />;
+        return podeAcessarTela('categorias') ? <TelaCategorias /> : <Dashboard />;
+      case 'consignacoes':
+        return podeAcessarTela('consignacoes') ? <TelaConsignacoes /> : <Dashboard />;
       default:
         return <Dashboard />;
     }
-  }, [telaAtiva]);
+  }, [usuarioLogado, telaAtiva, podeAcessarTela, fazerLogin]);
 
   // Loading durante verificação de login
   if (verificandoLogin) {
@@ -325,7 +303,7 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Se não está logado, mostrar tela de login
+  // Se não estiver logado, mostrar apenas a tela de login
   if (!usuarioLogado) {
     return (
       <Login 
@@ -336,23 +314,14 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Interface principal com menu lateral
   return (
-    <div className={`min-h-screen ${tema.fundo} flex transition-colors duration-300`}>
-      {/* Backdrop para mobile */}
-      {menuAberto && (
-        <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden transition-opacity duration-300"
-          onClick={fecharMenu}
-        />
-      )}
-
+    <div className={`flex h-screen ${tema.fundo}`}>
       {/* Menu Lateral */}
-      <MenuLateral 
+      <MenuLateral
         telaAtiva={telaAtiva}
-        onMudarTela={mudarTela}
+        onMudarTela={navegarPara}
         menuAberto={menuAberto}
-        onFecharMenu={fecharMenu}
+        onFecharMenu={() => setMenuAberto(false)}
         tipoUsuario={tipoUsuario}
         usuarioLogado={usuarioLogado}
         onToggleTema={toggleTema}
@@ -361,35 +330,39 @@ const AppContent: React.FC = () => {
       />
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 lg:ml-0">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header Mobile */}
-        <div className={`${tema.papel} shadow-sm border-b ${tema.borda} lg:hidden transition-colors duration-300`}>
-          <div className="px-4 py-3 flex items-center justify-between">
-            <button
-              onClick={toggleMenu}
-              className={`p-2 rounded-md ${tema.hover} ${tema.texto} transition-colors duration-200`}
-            >
-              <Menu className="h-6 w-6" />
-            </button>
-            <h1 className={`text-lg font-semibold ${tema.texto}`}>
-              Sistema de Consignação
-            </h1>
-            <div className={`text-sm ${tema.textoSecundario}`}>
-              {usuarioLogado?.nome}
-            </div>
-          </div>
+        <div className={`lg:hidden ${tema.papel} border-b ${tema.borda} px-4 py-3 flex items-center justify-between`}>
+          <button
+            onClick={() => setMenuAberto(true)}
+            className={`p-2 rounded-md ${tema.hover}`}
+          >
+            <Menu className={`h-6 w-6 ${tema.texto}`} />
+          </button>
+          <h1 className={`text-lg font-semibold ${tema.texto}`}>
+            Sistema de Consignação
+          </h1>
+          <div className="w-10"></div>
         </div>
 
         {/* Área de Conteúdo */}
-        <main className="min-h-screen transition-colors duration-300">
-          {renderConteudo()}
+        <main className="flex-1 overflow-auto">
+          {renderizarTela()}
         </main>
       </div>
+
+      {/* Overlay para mobile */}
+      {menuAberto && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+          onClick={() => setMenuAberto(false)}
+        />
+      )}
     </div>
   );
 };
 
-// Componente App com Provider
+// Componente principal com Provider
 const App: React.FC = () => {
   return (
     <AppProvider>
