@@ -1,95 +1,70 @@
 // src/contexts/AppContext.tsx
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useVendedores, useProdutos, useCategorias, useConsignacoes } from '../hooks/useSupabase';
-
-// Interfaces
-interface Tema {
-  fundo: string;
-  papel: string;
-  texto: string;
-  textoSecundario: string;
-  borda: string;
-  input: string;
-  hover: string;
-}
-
-interface Usuario {
-  id: number;
-  nome: string;
-  login: string;
-  tipo: 'admin' | 'vendedor';
-}
-
-interface Mensagem {
-  tipo: 'success' | 'error' | 'warning' | 'info';
-  texto: string;
-  timeout: number;
-}
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { useSupabase } from '../hooks/useSupabase';
+import { Tema, TipoMensagem } from '../types/Common';
+import { Vendedor } from '../types/Vendedor';
+import { Produto } from '../types/Produto';
+import { Categoria } from '../types/Categoria';
+import { Consignacao } from '../types/Consignacao';
 
 interface AppContextType {
   // Tema
-  tema: Tema;
   temaEscuro: boolean;
-  alternarTema: () => void;
+  setTemaEscuro: (tema: boolean) => void;
+  tema: Tema;
   
-  // Dados do Supabase
+  // Usuário
+  usuarioLogado: any;
+  setUsuarioLogado: (usuario: any) => void;
+  tipoUsuario: string | null;
+  setTipoUsuario: (tipo: string | null) => void;
+  
+  // Dados Supabase
   vendedores: any[];
   produtos: any[];
   categorias: any[];
   consignacoes: any[];
+  loading: boolean;
+  error: string | null;
   
-  // Operações CRUD
-  adicionarVendedor: (vendedor: any) => Promise<any>;
-  atualizarVendedor: (id: number, dados: any) => Promise<any>;
-  excluirVendedor: (id: number) => Promise<any>;
-  
-  adicionarProduto: (produto: any) => Promise<any>;
-  atualizarProduto: (id: number, dados: any) => Promise<any>;
-  excluirProduto: (id: number) => Promise<any>;
-  
-  adicionarCategoria: (categoria: any) => Promise<any>;
-  atualizarCategoria: (id: number, dados: any) => Promise<any>;
-  excluirCategoria: (id: number) => Promise<any>;
-  
-  adicionarConsignacao: (consignacao: any) => Promise<any>;
-  finalizarConsignacao: (id: number, dadosRetorno: any) => Promise<any>;
-  excluirConsignacao: (id: number) => Promise<any>;
-  
-  // Estados de loading
+  // Loadings específicos
   loadingVendedores: boolean;
   loadingProdutos: boolean;
   loadingCategorias: boolean;
   loadingConsignacoes: boolean;
   
-  // Erros
-  errorVendedores: string | null;
-  errorProdutos: string | null;
-  errorCategorias: string | null;
-  errorConsignacoes: string | null;
+  // Ações Supabase
+  adicionarVendedor: (vendedor: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  atualizarVendedor: (id: any, updates: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  excluirVendedor: (id: any) => Promise<{ success: boolean; error?: string }>;
+  adicionarProduto: (produto: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  atualizarProduto: (id: any, updates: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  excluirProduto: (id: any) => Promise<{ success: boolean; error?: string }>;
+  adicionarCategoria: (categoria: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  atualizarCategoria: (id: any, updates: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  excluirCategoria: (id: any) => Promise<{ success: boolean; error?: string }>;
+  adicionarConsignacao: (consignacao: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  finalizarConsignacao: (id: any, dadosRetorno: any) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+  excluirConsignacao: (id: any) => Promise<{ success: boolean; error?: string }>;
+  refetch: () => Promise<void>;
   
-  // Usuário logado
-  usuarioLogado: Usuario;
-  tipoUsuario: 'admin' | 'vendedor';
+  // Funcionalidades
+  mostrarMensagem: (tipo: TipoMensagem, texto: string) => void;
   fazerLogin: (login: string, senha: string) => boolean;
   fazerLogout: () => void;
   
-  // Mensagens
-  mostrarMensagem: (tipo: 'success' | 'error' | 'warning' | 'info', texto: string) => void;
-  mensagemAtual: Mensagem | null;
-  
-  // Cookies/Preferências
+  // Utils
   cookies: {
-    setCookie: (nome: string, valor: string, dias: number) => void;
-    getCookie: (nome: string) => string | null;
-    removeCookie: (nome: string) => void;
+    getCookie: (name: string) => string | null;
+    setCookie: (name: string, value: string, days?: number) => void;
+    removeCookie: (name: string) => void;
   };
-  
-  // Configurações
-  controleEstoqueHabilitado: boolean;
-  setControleEstoqueHabilitado: (valor: boolean) => void;
-  
-  // Refresh
-  refetchTodos: () => void;
+  formatarMoeda: (valor: number) => string;
+  formatarData: (data: string) => string;
+  formatarDocumento: (documento: string, tipo: 'cpf' | 'cnpj') => string;
+  validarCPF: (cpf: string) => boolean;
+  validarCNPJ: (cnpj: string) => boolean;
+  validarEmail: (email: string) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -102,290 +77,223 @@ export const useAppContext = () => {
   return context;
 };
 
-// Temas
-const temaClaroPaleta: Tema = {
-  fundo: 'bg-gray-100',
-  papel: 'bg-white',
-  texto: 'text-gray-900',
-  textoSecundario: 'text-gray-600',
-  borda: 'border-gray-200',
-  input: 'bg-white border-gray-300 text-gray-900',
-  hover: 'hover:bg-gray-50'
-};
-
-const temaEscuroPaleta: Tema = {
-  fundo: 'bg-gray-900',
-  papel: 'bg-gray-800',
-  texto: 'text-white',
-  textoSecundario: 'text-gray-300',
-  borda: 'border-gray-700',
-  input: 'bg-gray-800 border-gray-600 text-white',
-  hover: 'hover:bg-gray-700'
-};
-
-// Usuário admin padrão
-const ADMIN_PADRAO: Usuario = {
-  id: 1,
-  nome: 'Administrador',
-  login: 'admin',
-  tipo: 'admin'
-};
-
-interface AppProviderProps {
-  children: ReactNode;
-}
-
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  // Hooks do Supabase
-  const {
-    vendedores,
-    loading: loadingVendedores,
-    error: errorVendedores,
-    adicionarVendedor,
-    atualizarVendedor,
-    excluirVendedor,
-    refetch: refetchVendedores
-  } = useVendedores();
-
-  const {
-    produtos,
-    loading: loadingProdutos,
-    error: errorProdutos,
-    adicionarProduto,
-    atualizarProduto,
-    excluirProduto,
-    refetch: refetchProdutos
-  } = useProdutos();
-
-  const {
-    categorias,
-    loading: loadingCategorias,
-    error: errorCategorias,
-    adicionarCategoria,
-    atualizarCategoria,
-    excluirCategoria,
-    refetch: refetchCategorias
-  } = useCategorias();
-
-  const {
-    consignacoes,
-    loading: loadingConsignacoes,
-    error: errorConsignacoes,
-    adicionarConsignacao,
-    finalizarConsignacao: finalizarConsignacaoSupabase,
-    excluirConsignacao: excluirConsignacaoSupabase,
-    refetch: refetchConsignacoes
-  } = useConsignacoes();
-
-  // Estados locais
-  const [temaEscuro, setTemaEscuro] = useState(() => {
-    const temaSalvo = localStorage.getItem('tema');
-    return temaSalvo === 'escuro';
-  });
-
-  const [usuarioLogado, setUsuarioLogado] = useState<Usuario>(() => {
-    const usuarioSalvo = localStorage.getItem('usuarioLogado');
-    return usuarioSalvo ? JSON.parse(usuarioSalvo) : ADMIN_PADRAO;
-  });
-
-  const [tipoUsuario, setTipoUsuario] = useState<'admin' | 'vendedor'>(() => {
-    return usuarioLogado.tipo;
-  });
-
-  const [mensagemAtual, setMensagemAtual] = useState<Mensagem | null>(null);
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [temaEscuro, setTemaEscuro] = useState(false);
+  const [usuarioLogado, setUsuarioLogado] = useState<any>(null);
+  const [tipoUsuario, setTipoUsuario] = useState<string | null>(null);
   
-  const [controleEstoqueHabilitado, setControleEstoqueHabilitado] = useState(() => {
-    const controleSalvo = localStorage.getItem('controleEstoqueHabilitado');
-    return controleSalvo ? JSON.parse(controleSalvo) : true;
-  });
+  // Hook do Supabase
+  const supabaseData = useSupabase();
 
-  // Tema atual
-  const tema = temaEscuro ? temaEscuroPaleta : temaClaroPaleta;
+  // Temas
+  const temaClaro: Tema = {
+    background: 'bg-gray-50',
+    surface: 'bg-white',
+    primary: 'bg-blue-600',
+    secondary: 'bg-gray-600',
+    accent: 'bg-blue-500',
+    text: 'text-gray-900',
+    textSecondary: 'text-gray-600',
+    border: 'border-gray-200',
+    hover: 'hover:bg-gray-100',
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    warning: 'bg-yellow-500',
+    info: 'bg-blue-500',
+    menuAtivo: 'bg-blue-100'
+  };
 
-  // Funções do tema
-  const alternarTema = useCallback(() => {
-    setTemaEscuro(prev => {
-      const novoTema = !prev;
-      localStorage.setItem('tema', novoTema ? 'escuro' : 'claro');
-      return novoTema;
-    });
+  const temaEscuroObj: Tema = {
+    background: 'bg-gray-900',
+    surface: 'bg-gray-800',
+    primary: 'bg-blue-600',
+    secondary: 'bg-gray-400',
+    accent: 'bg-blue-400',
+    text: 'text-white',
+    textSecondary: 'text-gray-300',
+    border: 'border-gray-700',
+    hover: 'hover:bg-gray-700',
+    success: 'bg-green-600',
+    error: 'bg-red-600',
+    warning: 'bg-yellow-600',
+    info: 'bg-blue-600',
+    menuAtivo: 'bg-gray-700'
+  };
+
+  const tema = temaEscuro ? temaEscuroObj : temaClaro;
+
+  // Mensagens
+  const mostrarMensagem = useCallback((tipo: TipoMensagem, texto: string) => {
+    // Implementação simples - pode ser melhorada com toast/notification
+    if (tipo === 'error') {
+      console.error(texto);
+      alert(`Erro: ${texto}`);
+    } else if (tipo === 'success') {
+      console.log(texto);
+      alert(`Sucesso: ${texto}`);
+    } else {
+      console.log(texto);
+      alert(texto);
+    }
   }, []);
 
-  // Funções de autenticação
-  const fazerLogin = useCallback((login: string, senha: string): boolean => {
-    // Login admin
-    if (login === 'admin' && senha === 'admin123') {
-      const adminUser = ADMIN_PADRAO;
-      setUsuarioLogado(adminUser);
-      setTipoUsuario('admin');
-      localStorage.setItem('usuarioLogado', JSON.stringify(adminUser));
+  // Login/Logout
+  const fazerLogin = useCallback((login: string, senha: string) => {
+    // Simulação de login simples
+    const usuariosValidos = [
+      { id: 1, nome: 'Administrador', login: 'admin', senha: 'admin', status: 'ativo' },
+      { id: 2, nome: 'Vendedor', login: 'vendedor', senha: '123', status: 'ativo' }
+    ];
+
+    const usuario = usuariosValidos.find((u: any) => u.login === login && u.senha === senha && u.status === 'ativo');
+    
+    if (usuario) {
+      setUsuarioLogado(usuario);
+      setTipoUsuario(usuario.login === 'admin' ? 'admin' : 'vendedor');
+      cookies.setCookie('usuarioLogado', JSON.stringify(usuario), 7);
+      cookies.setCookie('tipoUsuario', usuario.login === 'admin' ? 'admin' : 'vendedor', 7);
       return true;
     }
-
-    // Login vendedor
-    const vendedor = vendedores.find(v => v.login === login && v.senha === senha && v.status === 'Ativo');
-    if (vendedor) {
-      const vendedorUser: Usuario = {
-        id: vendedor.id,
-        nome: vendedor.nome,
-        login: vendedor.login,
-        tipo: 'vendedor'
-      };
-      setUsuarioLogado(vendedorUser);
-      setTipoUsuario('vendedor');
-      localStorage.setItem('usuarioLogado', JSON.stringify(vendedorUser));
-      return true;
-    }
-
     return false;
-  }, [vendedores]);
+  }, []);
 
   const fazerLogout = useCallback(() => {
-    setUsuarioLogado(ADMIN_PADRAO);
-    setTipoUsuario('admin');
-    localStorage.removeItem('usuarioLogado');
+    setUsuarioLogado(null);
+    setTipoUsuario(null);
+    cookies.removeCookie('usuarioLogado');
+    cookies.removeCookie('tipoUsuario');
   }, []);
 
-  // Função de mensagens
-  const mostrarMensagem = useCallback((tipo: 'success' | 'error' | 'warning' | 'info', texto: string) => {
-    const timeout = tipo === 'success' ? 3000 : 5000;
-    setMensagemAtual({ tipo, texto, timeout });
-
-    setTimeout(() => {
-      setMensagemAtual(null);
-    }, timeout);
-  }, []);
-
-  // Funções de cookies
+  // Utilitários
   const cookies = {
-    setCookie: (nome: string, valor: string, dias: number) => {
-      const dataExpiracao = new Date();
-      dataExpiracao.setTime(dataExpiracao.getTime() + (dias * 24 * 60 * 60 * 1000));
-      document.cookie = `${nome}=${valor};expires=${dataExpiracao.toUTCString()};path=/`;
-    },
-    
-    getCookie: (nome: string): string | null => {
-      const nomeEQ = nome + "=";
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        let cookie = cookies[i];
-        while (cookie.charAt(0) === ' ') cookie = cookie.substring(1, cookie.length);
-        if (cookie.indexOf(nomeEQ) === 0) return cookie.substring(nomeEQ.length, cookie.length);
-      }
+    getCookie: (name: string): string | null => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
       return null;
     },
-    
-    removeCookie: (nome: string) => {
-      document.cookie = `${nome}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+    setCookie: (name: string, value: string, days: number = 7) => {
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${value}; expires=${expires}; path=/`;
+    },
+    removeCookie: (name: string) => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
     }
   };
 
-  // Wrapper para finalizar consignação
-  const finalizarConsignacao = useCallback(async (id: number, dadosRetorno: any) => {
-    try {
-      const resultado = await finalizarConsignacaoSupabase(id, dadosRetorno);
-      if (resultado.success) {
-        mostrarMensagem('success', 'Consignação finalizada com sucesso!');
-      } else {
-        mostrarMensagem('error', resultado.error);
-      }
-      return resultado;
-    } catch (error) {
-      mostrarMensagem('error', 'Erro ao finalizar consignação');
-      return { success: false, error: 'Erro ao finalizar consignação' };
+  const formatarMoeda = useCallback((valor: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor);
+  }, []);
+
+  const formatarData = useCallback((data: string): string => {
+    return new Date(data).toLocaleDateString('pt-BR');
+  }, []);
+
+  const formatarDocumento = useCallback((documento: string, tipo: 'cpf' | 'cnpj'): string => {
+    const nums = documento.replace(/\D/g, '');
+    if (tipo === 'cpf') {
+      return nums.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
     }
-  }, [finalizarConsignacaoSupabase, mostrarMensagem]);
+    return nums.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  }, []);
 
-  // Wrapper para excluir consignação
-  const excluirConsignacao = useCallback(async (id: number) => {
-    try {
-      const resultado = await excluirConsignacaoSupabase(id);
-      if (resultado.success) {
-        mostrarMensagem('success', 'Consignação excluída com sucesso!');
-      } else {
-        mostrarMensagem('error', resultado.error);
-      }
-      return resultado;
-    } catch (error) {
-      mostrarMensagem('error', 'Erro ao excluir consignação');
-      return { success: false, error: 'Erro ao excluir consignação' };
+  const validarCPF = useCallback((cpf: string): boolean => {
+    const nums = cpf.replace(/\D/g, '');
+    if (nums.length !== 11) return false;
+    if (nums === '00000000000') return false;
+    
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(nums.charAt(i)) * (10 - i);
     }
-  }, [excluirConsignacaoSupabase, mostrarMensagem]);
+    let remainder = 11 - (sum % 11);
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(nums.charAt(9))) return false;
+    
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(nums.charAt(i)) * (11 - i);
+    }
+    remainder = 11 - (sum % 11);
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(nums.charAt(10))) return false;
+    
+    return true;
+  }, []);
 
-  // Função para atualizar todos os dados
-  const refetchTodos = useCallback(() => {
-    refetchVendedores();
-    refetchProdutos();
-    refetchCategorias();
-    refetchConsignacoes();
-  }, [refetchVendedores, refetchProdutos, refetchCategorias, refetchConsignacoes]);
+  const validarCNPJ = useCallback((cnpj: string): boolean => {
+    const nums = cnpj.replace(/\D/g, '');
+    if (nums.length !== 14) return false;
+    if (nums === '00000000000000') return false;
+    return true; // Simplificado
+  }, []);
 
-  // Salvar configurações
-  useEffect(() => {
-    localStorage.setItem('controleEstoqueHabilitado', JSON.stringify(controleEstoqueHabilitado));
-  }, [controleEstoqueHabilitado]);
+  const validarEmail = useCallback((email: string): boolean => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  }, []);
 
-  const contextValue: AppContextType = {
+  const value: AppContextType = {
     // Tema
-    tema,
     temaEscuro,
-    alternarTema,
-    
-    // Dados
-    vendedores,
-    produtos,
-    categorias,
-    consignacoes,
-    
-    // Operações CRUD
-    adicionarVendedor,
-    atualizarVendedor,
-    excluirVendedor,
-    adicionarProduto,
-    atualizarProduto,
-    excluirProduto,
-    adicionarCategoria,
-    atualizarCategoria,
-    excluirCategoria,
-    adicionarConsignacao,
-    finalizarConsignacao,
-    excluirConsignacao,
-    
-    // Loading states
-    loadingVendedores,
-    loadingProdutos,
-    loadingCategorias,
-    loadingConsignacoes,
-    
-    // Errors
-    errorVendedores,
-    errorProdutos,
-    errorCategorias,
-    errorConsignacoes,
+    setTemaEscuro,
+    tema,
     
     // Usuário
     usuarioLogado,
+    setUsuarioLogado,
     tipoUsuario,
+    setTipoUsuario,
+    
+    // Dados Supabase
+    vendedores: supabaseData.vendedores,
+    produtos: supabaseData.produtos,
+    categorias: supabaseData.categorias,
+    consignacoes: supabaseData.consignacoes,
+    loading: supabaseData.loading,
+    error: supabaseData.error,
+    
+    // Loadings específicos
+    loadingVendedores: supabaseData.loading,
+    loadingProdutos: supabaseData.loading,
+    loadingCategorias: supabaseData.loading,
+    loadingConsignacoes: supabaseData.loading,
+    
+    // Ações Supabase
+    adicionarVendedor: supabaseData.adicionarVendedor,
+    atualizarVendedor: supabaseData.atualizarVendedor,
+    excluirVendedor: supabaseData.excluirVendedor,
+    adicionarProduto: supabaseData.adicionarProduto,
+    atualizarProduto: supabaseData.atualizarProduto,
+    excluirProduto: supabaseData.excluirProduto,
+    adicionarCategoria: supabaseData.adicionarCategoria,
+    atualizarCategoria: supabaseData.atualizarCategoria,
+    excluirCategoria: supabaseData.excluirCategoria,
+    adicionarConsignacao: supabaseData.adicionarConsignacao,
+    finalizarConsignacao: supabaseData.finalizarConsignacao,
+    excluirConsignacao: supabaseData.excluirConsignacao,
+    refetch: supabaseData.refetch,
+    
+    // Funcionalidades
+    mostrarMensagem,
     fazerLogin,
     fazerLogout,
     
-    // Mensagens
-    mostrarMensagem,
-    mensagemAtual,
-    
-    // Cookies
+    // Utils
     cookies,
-    
-    // Configurações
-    controleEstoqueHabilitado,
-    setControleEstoqueHabilitado,
-    
-    // Refresh
-    refetchTodos
+    formatarMoeda,
+    formatarData,
+    formatarDocumento,
+    validarCPF,
+    validarCNPJ,
+    validarEmail
   };
 
   return (
-    <AppContext.Provider value={contextValue}>
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );

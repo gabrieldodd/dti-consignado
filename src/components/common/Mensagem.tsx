@@ -1,143 +1,191 @@
 // src/components/common/Mensagem.tsx
-import React, { useEffect, useState } from 'react';
-import { useAppContext } from '../../contexts/AppContext';
-import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle, X, AlertTriangle, Info } from 'lucide-react';
+import { TipoMensagem } from '../../types/Common';
 
-export const Mensagem: React.FC = () => {
-  const { mensagemAtual } = useAppContext();
-  const [visivel, setVisivel] = useState(false);
-  const [mensagemLocal, setMensagemLocal] = useState<typeof mensagemAtual>(null);
+interface MensagemProps {
+  tipo: TipoMensagem;
+  texto: string;
+  visivel: boolean;
+  onFechar: () => void;
+  autoFechar?: boolean;
+  tempoAutoFechar?: number;
+}
+
+export const Mensagem: React.FC<MensagemProps> = ({
+  tipo,
+  texto,
+  visivel,
+  onFechar,
+  autoFechar = true,
+  tempoAutoFechar = 5000
+}) => {
+  const [mostrar, setMostrar] = useState(false);
 
   useEffect(() => {
-    if (mensagemAtual) {
-      setMensagemLocal(mensagemAtual);
-      setVisivel(true);
+    if (visivel) {
+      setMostrar(true);
       
-      // Auto-hide após o timeout
-      const timer = setTimeout(() => {
-        setVisivel(false);
-        setTimeout(() => setMensagemLocal(null), 300); // Aguarda animação
-      }, mensagemAtual.timeout);
-
-      return () => clearTimeout(timer);
+      if (autoFechar) {
+        const timer = setTimeout(() => {
+          setMostrar(false);
+          setTimeout(onFechar, 300); // Aguarda animação
+        }, tempoAutoFechar);
+        
+        return () => clearTimeout(timer);
+      }
+    } else {
+      setMostrar(false);
     }
-  }, [mensagemAtual]);
+  }, [visivel, autoFechar, tempoAutoFechar, onFechar]);
 
-  const fecharMensagem = () => {
-    setVisivel(false);
-    setTimeout(() => setMensagemLocal(null), 300);
+  const obterIcone = () => {
+    switch (tipo) {
+      case 'success':
+        return <CheckCircle size={20} />;
+      case 'error':
+        return <AlertCircle size={20} />;
+      case 'warning':
+        return <AlertTriangle size={20} />;
+      case 'info':
+        return <Info size={20} />;
+      default:
+        return <Info size={20} />;
+    }
   };
 
-  if (!mensagemLocal) return null;
-
-  const getIconeETema = () => {
-    switch (mensagemLocal.tipo) {
+  const obterCores = () => {
+    switch (tipo) {
       case 'success':
         return {
-          icone: CheckCircle,
-          cores: 'bg-green-50 border-green-200 text-green-800',
-          iconeColor: 'text-green-400'
+          bg: 'bg-green-50 border-green-200',
+          text: 'text-green-800',
+          icon: 'text-green-600',
+          button: 'text-green-600 hover:text-green-800'
         };
       case 'error':
         return {
-          icone: AlertCircle,
-          cores: 'bg-red-50 border-red-200 text-red-800',
-          iconeColor: 'text-red-400'
+          bg: 'bg-red-50 border-red-200',
+          text: 'text-red-800',
+          icon: 'text-red-600',
+          button: 'text-red-600 hover:text-red-800'
         };
       case 'warning':
         return {
-          icone: AlertTriangle,
-          cores: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-          iconeColor: 'text-yellow-400'
+          bg: 'bg-yellow-50 border-yellow-200',
+          text: 'text-yellow-800',
+          icon: 'text-yellow-600',
+          button: 'text-yellow-600 hover:text-yellow-800'
         };
       case 'info':
         return {
-          icone: Info,
-          cores: 'bg-blue-50 border-blue-200 text-blue-800',
-          iconeColor: 'text-blue-400'
+          bg: 'bg-blue-50 border-blue-200',
+          text: 'text-blue-800',
+          icon: 'text-blue-600',
+          button: 'text-blue-600 hover:text-blue-800'
         };
       default:
         return {
-          icone: Info,
-          cores: 'bg-gray-50 border-gray-200 text-gray-800',
-          iconeColor: 'text-gray-400'
+          bg: 'bg-gray-50 border-gray-200',
+          text: 'text-gray-800',
+          icon: 'text-gray-600',
+          button: 'text-gray-600 hover:text-gray-800'
         };
     }
   };
 
-  const { icone: Icone, cores, iconeColor } = getIconeETema();
+  const cores = obterCores();
+
+  if (!visivel && !mostrar) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 max-w-sm w-full">
-      <div
-        className={`
-          transform transition-all duration-300 ease-in-out
-          ${visivel ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-        `}
-      >
-        <div className={`
-          rounded-lg border shadow-lg p-4 ${cores}
-          backdrop-blur-sm bg-opacity-95
-        `}>
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <Icone className={`h-5 w-5 ${iconeColor}`} />
-            </div>
-            
-            <div className="ml-3 w-0 flex-1">
-              <p className="text-sm font-medium">
-                {mensagemLocal.texto}
-              </p>
-            </div>
-            
-            <div className="ml-4 flex-shrink-0 flex">
-              <button
-                onClick={fecharMensagem}
-                className={`
-                  inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2
-                  ${mensagemLocal.tipo === 'success' ? 'text-green-500 hover:bg-green-100 focus:ring-green-600' :
-                    mensagemLocal.tipo === 'error' ? 'text-red-500 hover:bg-red-100 focus:ring-red-600' :
-                    mensagemLocal.tipo === 'warning' ? 'text-yellow-500 hover:bg-yellow-100 focus:ring-yellow-600' :
-                    'text-blue-500 hover:bg-blue-100 focus:ring-blue-600'
-                  }
-                `}
-              >
-                <span className="sr-only">Fechar</span>
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          
-          {/* Barra de progresso */}
-          <div className="mt-2 bg-white bg-opacity-20 rounded-full h-1 overflow-hidden">
-            <div 
-              className={`
-                h-full transition-all ease-linear
-                ${mensagemLocal.tipo === 'success' ? 'bg-green-500' :
-                  mensagemLocal.tipo === 'error' ? 'bg-red-500' :
-                  mensagemLocal.tipo === 'warning' ? 'bg-yellow-500' :
-                  'bg-blue-500'
-                }
-              `}
-              style={{
-                animation: `progress ${mensagemLocal.timeout}ms linear`,
-                animationFillMode: 'forwards'
-              }}
-            />
-          </div>
-        </div>
-      </div>
-      
-      <style jsx>{`
-        @keyframes progress {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
+    <>
+      <style>{`
+        .mensagem-enter {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        .mensagem-enter-active {
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 300ms, transform 300ms;
+        }
+        .mensagem-exit {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .mensagem-exit-active {
+          opacity: 0;
+          transform: translateY(-10px);
+          transition: opacity 300ms, transform 300ms;
         }
       `}</style>
-    </div>
+      
+      <div className={`
+        fixed top-4 right-4 z-50 max-w-sm w-full
+        ${mostrar ? 'mensagem-enter-active' : 'mensagem-exit-active'}
+      `}>
+        <div className={`
+          ${cores.bg} border ${cores.text} px-4 py-3 rounded-lg shadow-lg
+          flex items-center space-x-3
+        `}>
+          <div className={cores.icon}>
+            {obterIcone()}
+          </div>
+          
+          <div className="flex-1 text-sm font-medium">
+            {texto}
+          </div>
+          
+          <button
+            onClick={() => {
+              setMostrar(false);
+              setTimeout(onFechar, 300);
+            }}
+            className={`
+              ${cores.button} p-1 rounded-md transition-colors
+              hover:bg-white hover:bg-opacity-20
+            `}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+    </>
   );
+};
+
+// Hook para usar mensagens
+export const useMensagem = () => {
+  const [mensagem, setMensagem] = useState<{
+    tipo: TipoMensagem;
+    texto: string;
+    visivel: boolean;
+  }>({
+    tipo: 'info',
+    texto: '',
+    visivel: false
+  });
+
+  const mostrarMensagem = (tipo: TipoMensagem, texto: string) => {
+    setMensagem({ tipo, texto, visivel: true });
+  };
+
+  const fecharMensagem = () => {
+    setMensagem(prev => ({ ...prev, visivel: false }));
+  };
+
+  const componenteMensagem = (
+    <Mensagem
+      tipo={mensagem.tipo}
+      texto={mensagem.texto}
+      visivel={mensagem.visivel}
+      onFechar={fecharMensagem}
+    />
+  );
+
+  return {
+    mostrarMensagem,
+    componenteMensagem
+  };
 };

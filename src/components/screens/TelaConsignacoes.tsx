@@ -1,1311 +1,1049 @@
 // src/components/screens/TelaConsignacoes.tsx
-import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
-import { 
-  ShoppingCart, 
-  Plus, 
-  Search, 
-  Eye, 
-  Trash2, 
-  AlertTriangle, 
-  QrCode, 
-  Package,
-  Calculator,
-  Clock,
-  CheckCircle,
-  XCircle,
-  User,
-  Phone,
-  FileText,
-  X,
-  Save,
-  ArrowLeft,
-  Edit,
-  Filter,
-  Scan,
-  Minus
-} from 'lucide-react';
-
+import React, { useState, useMemo } from 'react';
+import { Plus, Search, Eye, Edit, Trash2, Package, Clock, CheckCircle, X, Calculator } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
-import { useFormatters } from '../../hooks/useFormatters';
-import { useValidation } from '../../hooks/useValidation';
+import { Consignacao } from '../../types/Consignacao';
+import { Produto } from '../../types/Produto';
 
-// Interfaces
-interface Vendedor {
-  id: number;
-  nome: string;
-  email: string;
-  telefone: string;
-  status: string;
-  login: string;
-  senha: string;
-  data_cadastro: string;
-}
-
-interface Produto {
-  id: number;
-  nome: string;
-  descricao: string;
-  codigo_barras: string;
-  categoria: string;
-  valor_custo: number;
-  valor_venda: number;
-  estoque: number;
-  estoque_minimo: number;
-  ativo: boolean;
-  data_cadastro: string;
-}
-
-interface Consignacao {
-  id: number;
-  cliente_nome: string;
-  cliente_documento: string;
-  cliente_telefone: string;
-  tipo_documento: 'cpf' | 'cnpj';
-  vendedor_id: number;
-  vendedor?: Vendedor;
-  quantidade_total: number;
-  valor_total: number;
-  data_consignacao: string;
-  data_retorno?: string;
-  status: 'ativa' | 'finalizada' | 'cancelada';
-  observacoes?: string;
-  retorno?: {
-    quantidade_retornada: number;
-    valor_retornado: number;
-    quantidade_vendida: number;
-    valor_devido: number;
-  }[];
-}
-
-interface ConsignacaoForm {
-  clienteNome: string;
-  clienteDocumento: string;
-  clienteTelefone: string;
-  tipoDocumento: 'cpf' | 'cnpj';
-  vendedorId: string;
-  quantidadeTotal: string;
-  valorTotal: string;
-  observacoes: string;
-}
-
-// Constantes
-const FORM_INICIAL: ConsignacaoForm = {
-  clienteNome: '',
-  clienteDocumento: '',
-  clienteTelefone: '',
-  tipoDocumento: 'cpf',
-  vendedorId: '',
-  quantidadeTotal: '',
-  valorTotal: '',
-  observacoes: ''
-};
-
-// Componente de estatísticas
-const EstatisticasConsignacoes = memo(() => {
-  const { tema, consignacoes } = useAppContext();
-  
-  const estatisticas = useMemo(() => {
-    const ativas = consignacoes.filter(c => c.status === 'ativa').length;
-    const finalizadas = consignacoes.filter(c => c.status === 'finalizada').length;
-    const valorTotal = consignacoes.reduce((acc, c) => acc + (c.valor_total || 0), 0);
-    
-    return { ativas, finalizadas, valorTotal };
-  }, [consignacoes]);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Ativas</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.ativas}</p>
-          </div>
-          <Clock className="h-8 w-8 text-orange-600" />
-        </div>
-      </div>
-
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Finalizadas</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.finalizadas}</p>
-          </div>
-          <CheckCircle className="h-8 w-8 text-green-600" />
-        </div>
-      </div>
-
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Valor Total</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>
-              R$ {estatisticas.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <Calculator className="h-8 w-8 text-purple-600" />
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// Componente principal
 export const TelaConsignacoes: React.FC = () => {
-  // Context e Hooks
   const { 
     tema, 
     consignacoes, 
-    produtos,
     vendedores,
+    produtos,
+    adicionarConsignacao, 
+    finalizarConsignacao, 
+    excluirConsignacao, 
     mostrarMensagem,
-    cookies,
-    usuarioLogado,
-    tipoUsuario,
-    adicionarConsignacao,
-    finalizarConsignacao: finalizarConsignacaoContext,
-    excluirConsignacao: excluirConsignacaoContext,
-    loadingConsignacoes,
-    errorConsignacoes
+    formatarMoeda,
+    formatarData,
+    formatarDocumento
   } = useAppContext();
-  
-  const { formatarMoedaBR, formatarCPF, formatarCNPJ, formatarTelefone } = useFormatters();
-  const { validarCPF, validarCNPJ } = useValidation();
 
-  // Loading e Erro
-  if (loadingConsignacoes) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando consignações...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (errorConsignacoes) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
-          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar consignações</p>
-          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorConsignacoes}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Estados
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [ordenacao, setOrdenacao] = useState<'data' | 'valor' | 'cliente'>('data');
   const [modalAberto, setModalAberto] = useState(false);
-  const [modalRetornoAberto, setModalRetornoAberto] = useState(false);
-  const [modalDetalhesAberto, setModalDetalhesAberto] = useState(false);
-  const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
-  const [consignacaoRetorno, setConsignacaoRetorno] = useState<Consignacao | null>(null);
-  const [consignacaoDetalhes, setConsignacaoDetalhes] = useState<Consignacao | null>(null);
-  
-  // Estados do modal de retorno
-  const [retornoForm, setRetornoForm] = useState({
-    quantidadeRetornada: 0,
-    valorRetornado: 0
-  });
-  const [codigoLeitura, setCodigoLeitura] = useState('');
-  const [produtosLidos, setProdutosLidos] = useState<{produto: Produto, quantidade: number}[]>([]);
-
-  // Filtros
-  const [filtroStatus, setFiltroStatus] = useState(() => {
-    return cookies.getCookie('filtroStatusConsignacoes') || 'todas';
-  });
-  const [buscaTexto, setBuscaTexto] = useState('');
+  const [modalDetalhes, setModalDetalhes] = useState(false);
+  const [modalRetorno, setModalRetorno] = useState(false);
+  const [consignacaoSelecionada, setConsignacaoSelecionada] = useState<any>(null);
+  const [carregando, setCarregando] = useState(false);
 
   // Estados do formulário
-  const [formConsignacao, setFormConsignacao] = useState<ConsignacaoForm>(FORM_INICIAL);
-  const [formErrors, setFormErrors] = useState<any>({});
+  const [formData, setFormData] = useState({
+    clienteNome: '',
+    clienteDocumento: '',
+    clienteTelefone: '',
+    tipoDocumento: 'cpf' as 'cpf' | 'cnpj',
+    vendedorId: '',
+    observacoes: ''
+  });
 
-  // Salvar filtros nos cookies
-  useEffect(() => {
-    cookies.setCookie('filtroStatusConsignacoes', filtroStatus, 30);
-  }, [filtroStatus, cookies]);
+  const [produtosConsignacao, setProdutosConsignacao] = useState<any[]>([]);
+  const [produtoSelecionado, setProdutoSelecionado] = useState('');
+  const [quantidadeProduto, setQuantidadeProduto] = useState('');
+  const [erros, setErros] = useState<Record<string, string>>({});
 
-  // Filtrar consignações
-  const consignacoesFiltradas = useMemo(() => {
-    let resultado = consignacoes;
+  // Estados do retorno
+  const [dadosRetorno, setDadosRetorno] = useState({
+    quantidadeRetornada: 0,
+    valorRetornado: 0,
+    quantidadeVendida: 0,
+    valorDevido: 0,
+    observacoes: ''
+  });
 
-    if (tipoUsuario === 'vendedor') {
-      resultado = resultado.filter(c => c.vendedor_id === usuarioLogado.id);
-    }
+  // Consignações filtradas e ordenadas
+  const consignacoesOrdenadas = useMemo(() => {
+    let filtradas = consignacoes.filter((consignacao: any) => {
+      const buscaMatch = 
+        (consignacao.cliente_nome || consignacao.clienteNome || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (consignacao.cliente_documento || consignacao.clienteDocumento || '').includes(busca) ||
+        (consignacao.vendedor?.nome || '').toLowerCase().includes(busca.toLowerCase());
 
-    if (filtroStatus !== 'todas') {
-      resultado = resultado.filter(c => c.status === filtroStatus);
-    }
+      const statusMatch = filtroStatus === 'todos' || consignacao.status === filtroStatus;
 
-    if (buscaTexto) {
-      resultado = resultado.filter(c => 
-        c.cliente_nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        c.cliente_documento.includes(buscaTexto) ||
-        (c.vendedor && c.vendedor.nome.toLowerCase().includes(buscaTexto.toLowerCase()))
-      );
-    }
-
-    return resultado;
-  }, [consignacoes, tipoUsuario, usuarioLogado, filtroStatus, buscaTexto]);
-
-  // Handlers modais
-  const abrirModal = useCallback(() => {
-    setFormConsignacao({
-      ...FORM_INICIAL,
-      vendedorId: tipoUsuario === 'vendedor' ? usuarioLogado.id.toString() : ''
+      return buscaMatch && statusMatch;
     });
-    setFormErrors({});
+
+    return [...filtradas].sort((a: any, b: any) => {
+      switch (ordenacao) {
+        case 'valor':
+          const valorA = a.valor_total || a.valorTotal || 0;
+          const valorB = b.valor_total || b.valorTotal || 0;
+          return valorB - valorA;
+        case 'cliente':
+          const clienteA = a.cliente_nome || a.clienteNome || '';
+          const clienteB = b.cliente_nome || b.clienteNome || '';
+          return clienteA.localeCompare(clienteB);
+        default:
+          const dataA = a.data_consignacao || a.dataConsignacao || a.created_at || '';
+          const dataB = b.data_consignacao || b.dataConsignacao || b.created_at || '';
+          return new Date(dataB).getTime() - new Date(dataA).getTime();
+      }
+    });
+  }, [consignacoes, busca, filtroStatus, ordenacao]);
+
+  // Validações
+  const validarFormulario = () => {
+    const novosErros: Record<string, string> = {};
+
+    if (!formData.clienteNome.trim()) {
+      novosErros.clienteNome = 'Nome do cliente é obrigatório';
+    }
+
+    if (!formData.clienteDocumento.trim()) {
+      novosErros.clienteDocumento = 'Documento do cliente é obrigatório';
+    }
+
+    if (!formData.clienteTelefone.trim()) {
+      novosErros.clienteTelefone = 'Telefone do cliente é obrigatório';
+    }
+
+    if (!formData.vendedorId) {
+      novosErros.vendedorId = 'Vendedor é obrigatório';
+    }
+
+    if (produtosConsignacao.length === 0) {
+      novosErros.produtos = 'Adicione pelo menos um produto';
+    }
+
+    setErros(novosErros);
+    return Object.keys(novosErros).length === 0;
+  };
+
+  // Funções do modal
+  const abrirModalNovo = () => {
+    setFormData({
+      clienteNome: '',
+      clienteDocumento: '',
+      clienteTelefone: '',
+      tipoDocumento: 'cpf',
+      vendedorId: '',
+      observacoes: ''
+    });
     setProdutosConsignacao([]);
+    setProdutoSelecionado('');
+    setQuantidadeProduto('');
+    setErros({});
     setModalAberto(true);
-  }, [tipoUsuario, usuarioLogado]);
+  };
 
-  const fecharModal = useCallback(() => {
+  const fecharModal = () => {
     setModalAberto(false);
-    setFormConsignacao(FORM_INICIAL);
-    setFormErrors({});
-    setProdutosConsignacao([]);
-  }, []);
+    setModalDetalhes(false);
+    setModalRetorno(false);
+    setConsignacaoSelecionada(null);
+  };
 
-  const abrirModalRetorno = useCallback((consignacao: Consignacao) => {
-    setConsignacaoRetorno(consignacao);
-    setRetornoForm({
-      quantidadeRetornada: 0,
-      valorRetornado: 0
-    });
-    setProdutosLidos([]);
-    setCodigoLeitura('');
-    setModalRetornoAberto(true);
-  }, []);
-
-  const fecharModalRetorno = useCallback(() => {
-    setModalRetornoAberto(false);
-    setConsignacaoRetorno(null);
-    setCodigoLeitura('');
-    setProdutosLidos([]);
-    setRetornoForm({
-      quantidadeRetornada: 0,
-      valorRetornado: 0
-    });
-  }, []);
-
-  const abrirModalDetalhes = useCallback((consignacao: Consignacao) => {
-    setConsignacaoDetalhes(consignacao);
-    setModalDetalhesAberto(true);
-  }, []);
-
-  const fecharModalDetalhes = useCallback(() => {
-    setModalDetalhesAberto(false);
-    setConsignacaoDetalhes(null);
-  }, []);
-
-  const abrirModalConfirmacao = useCallback(() => {
-    setModalConfirmacaoAberto(true);
-  }, []);
-
-  const fecharModalConfirmacao = useCallback(() => {
-    setModalConfirmacaoAberto(false);
-  }, []);
-
-  // Funções do modal de retorno
-  const lerCodigoRetorno = useCallback(() => {
-    if (!codigoLeitura.trim()) {
-      mostrarMensagem('error', 'Digite um código de barras');
+  // Adicionar produto à consignação
+  const adicionarProduto = () => {
+    if (!produtoSelecionado || !quantidadeProduto) {
+      mostrarMensagem('error', 'Selecione um produto e informe a quantidade');
       return;
     }
 
-    const produto = produtos.find(p => p.codigo_barras === codigoLeitura.trim() && p.ativo);
-    if (!produto) {
-      mostrarMensagem('error', 'Produto não encontrado ou inativo');
+    const produto = produtos.find((p: any) => p.id === parseInt(produtoSelecionado));
+    if (!produto) return;
+
+    const quantidade = parseInt(quantidadeProduto);
+    if (quantidade <= 0) {
+      mostrarMensagem('error', 'Quantidade deve ser maior que zero');
       return;
     }
 
-    const produtoExistente = produtosLidos.find(pl => pl.produto.id === produto.id);
-    
+    const produtoExistente = produtosConsignacao.find(p => p.produtoId === produto.id);
     if (produtoExistente) {
-      setProdutosLidos(prev => prev.map(pl =>
-        pl.produto.id === produto.id
-          ? { ...pl, quantidade: pl.quantidade + 1 }
-          : pl
-      ));
-    } else {
-      setProdutosLidos(prev => [...prev, { produto, quantidade: 1 }]);
+      mostrarMensagem('error', 'Produto já adicionado à consignação');
+      return;
     }
 
-    const novaQuantidade = retornoForm.quantidadeRetornada + 1;
-    const novoValor = retornoForm.valorRetornado + produto.valor_venda;
-
-    setRetornoForm({
-      quantidadeRetornada: novaQuantidade,
-      valorRetornado: novoValor
-    });
-
-    setCodigoLeitura('');
-    mostrarMensagem('success', `${produto.nome} adicionado! Valor: ${formatarMoedaBR(produto.valor_venda)}`);
-  }, [codigoLeitura, produtos, produtosLidos, retornoForm, mostrarMensagem, formatarMoedaBR]);
-
-  const removerProdutoLido = useCallback((produtoId: number) => {
-    const produtoRemover = produtosLidos.find(pl => pl.produto.id === produtoId);
-    if (!produtoRemover) return;
-
-    if (produtoRemover.quantidade > 1) {
-      setProdutosLidos(prev => prev.map(pl =>
-        pl.produto.id === produtoId
-          ? { ...pl, quantidade: pl.quantidade - 1 }
-          : pl
-      ));
-      setRetornoForm(prev => ({
-        quantidadeRetornada: prev.quantidadeRetornada - 1,
-        valorRetornado: prev.valorRetornado - produtoRemover.produto.valorVenda
-      }));
-    } else {
-      setProdutosLidos(prev => prev.filter(pl => pl.produto.id !== produtoId));
-      setRetornoForm(prev => ({
-        quantidadeRetornada: prev.quantidadeRetornada - 1,
-        valorRetornado: prev.valorRetornado - produtoRemover.produto.valorVenda
-      }));
-    }
-
-    mostrarMensagem('success', `${produtoRemover.produto.nome} removido!`);
-  }, [produtosLidos, mostrarMensagem]);
-
-  const finalizarConsignacao = useCallback(async () => {
-    if (!consignacaoRetorno) return;
-
-    const quantidadeRetornada = retornoForm.quantidadeRetornada;
-    const valorRetornado = retornoForm.valorRetornado;
-    const quantidadeVendida = consignacaoRetorno.quantidade_total - quantidadeRetornada;
-    const valorDevido = consignacaoRetorno.valor_total - valorRetornado;
-    
-    const dadosRetorno = {
-      quantidade_retornada: quantidadeRetornada,
-      valor_retornado: valorRetornado,
-      quantidade_vendida: quantidadeVendida,
-      valor_devido: valorDevido
+    const valorVenda = produto.valor_venda || produto.valorVenda || 0;
+    const novoProduto = {
+      produtoId: produto.id,
+      produto: produto,
+      quantidade: quantidade,
+      valorUnitario: valorVenda,
+      valorTotal: quantidade * valorVenda
     };
 
-    const resultado = await finalizarConsignacaoContext(consignacaoRetorno.id, dadosRetorno);
-    
-    if (resultado.success) {
-      fecharModalConfirmacao();
-      fecharModalRetorno();
-    }
-  }, [consignacaoRetorno, retornoForm, finalizarConsignacaoContext, fecharModalConfirmacao, fecharModalRetorno]);
+    setProdutosConsignacao([...produtosConsignacao, novoProduto]);
+    setProdutoSelecionado('');
+    setQuantidadeProduto('');
+  };
 
-  // Função para excluir consignação
-  const excluirConsignacao = useCallback(async (consignacao: Consignacao) => {
-    if (confirm(`Confirma a exclusão da consignação de "${consignacao.cliente_nome}"?`)) {
-      await excluirConsignacaoContext(consignacao.id);
-    }
-  }, [excluirConsignacaoContext]);
+  // Remover produto da consignação
+  const removerProduto = (produtoId: number) => {
+    setProdutosConsignacao(produtosConsignacao.filter(p => p.produtoId !== produtoId));
+  };
 
-  // Validação do formulário
-  const validarFormulario = useCallback(() => {
-    const errors: any = {};
-
-    if (!formConsignacao.clienteNome.trim()) errors.clienteNome = 'Nome do cliente é obrigatório';
-    
-    if (!formConsignacao.clienteDocumento.trim()) {
-      errors.clienteDocumento = `${formConsignacao.tipoDocumento.toUpperCase()} é obrigatório`;
-    } else {
-      const validador = formConsignacao.tipoDocumento === 'cpf' ? validarCPF : validarCNPJ;
-      if (!validador(formConsignacao.clienteDocumento)) {
-        errors.clienteDocumento = `${formConsignacao.tipoDocumento.toUpperCase()} inválido`;
-      }
-    }
-
-    if (!formConsignacao.clienteTelefone.trim()) {
-      errors.clienteTelefone = 'Telefone do cliente é obrigatório';
-    }
-
-    if (!formConsignacao.vendedorId) {
-      errors.vendedorId = 'Vendedor é obrigatório';
-    }
-
-    if (!formConsignacao.quantidadeTotal || parseInt(formConsignacao.quantidadeTotal) <= 0) {
-      errors.quantidadeTotal = 'Quantidade deve ser maior que zero';
-    }
-
-    if (!formConsignacao.valorTotal || parseFloat(formConsignacao.valorTotal) <= 0) {
-      errors.valorTotal = 'Valor deve ser maior que zero';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formConsignacao, validarCPF, validarCNPJ]);
+  // Calcular totais
+  const calcularTotais = () => {
+    const quantidadeTotal = produtosConsignacao.reduce((total, p) => total + p.quantidade, 0);
+    const valorTotal = produtosConsignacao.reduce((total, p) => total + p.valorTotal, 0);
+    return { quantidadeTotal, valorTotal };
+  };
 
   // Salvar consignação
-  const salvarConsignacao = useCallback(async () => {
+  const salvarConsignacao = async () => {
     if (!validarFormulario()) return;
 
-    const vendedor = vendedores.find(v => v.id === parseInt(formConsignacao.vendedorId));
-    if (!vendedor) return;
+    setCarregando(true);
+    try {
+      const { quantidadeTotal, valorTotal } = calcularTotais();
+      
+      const dadosConsignacao = {
+        cliente_nome: formData.clienteNome.trim(),
+        cliente_documento: formData.clienteDocumento.trim(),
+        cliente_telefone: formData.clienteTelefone.trim(),
+        tipo_documento: formData.tipoDocumento,
+        vendedor_id: parseInt(formData.vendedorId),
+        quantidade_total: quantidadeTotal,
+        valor_total: valorTotal,
+        data_consignacao: new Date().toISOString(),
+        status: 'ativa' as const,
+        observacoes: formData.observacoes.trim(),
+        produtos: produtosConsignacao
+      };
 
-    const novaConsignacao = {
-      cliente_nome: formConsignacao.clienteNome,
-      cliente_documento: formConsignacao.clienteDocumento,
-      cliente_telefone: formConsignacao.clienteTelefone,
-      tipo_documento: formConsignacao.tipoDocumento,
-      vendedor_id: parseInt(formConsignacao.vendedorId),
-      quantidade_total: parseInt(formConsignacao.quantidadeTotal),
-      valor_total: parseFloat(formConsignacao.valorTotal),
-      status: 'ativa',
-      observacoes: formConsignacao.observacoes || null
-    };
+      const resultado = await adicionarConsignacao(dadosConsignacao);
 
-    const resultado = await adicionarConsignacao(novaConsignacao);
-    
-    if (resultado.success) {
-      mostrarMensagem('success', 'Consignação criada com sucesso!');
-      fecharModal();
-    } else {
-      mostrarMensagem('error', resultado.error || 'Erro ao criar consignação');
+      if (resultado.success) {
+        mostrarMensagem('success', 'Consignação criada com sucesso!');
+        fecharModal();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao criar consignação');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro inesperado ao criar consignação');
+    } finally {
+      setCarregando(false);
     }
-  }, [formConsignacao, vendedores, validarFormulario, adicionarConsignacao, mostrarMensagem, fecharModal]);
+  };
+
+  // Abrir modal de detalhes
+  const abrirDetalhes = (consignacao: any) => {
+    setConsignacaoSelecionada(consignacao);
+    setModalDetalhes(true);
+  };
+
+  // Abrir modal de retorno
+  const abrirRetorno = (consignacao: any) => {
+    setConsignacaoSelecionada(consignacao);
+    const quantidadeTotal = consignacao.quantidade_total || consignacao.quantidadeTotal || 0;
+    const valorTotal = consignacao.valor_total || consignacao.valorTotal || 0;
+    
+    setDadosRetorno({
+      quantidadeRetornada: quantidadeTotal,
+      valorRetornado: valorTotal,
+      quantidadeVendida: 0,
+      valorDevido: 0,
+      observacoes: ''
+    });
+    setModalRetorno(true);
+  };
+
+  // Calcular valores do retorno
+  const calcularRetorno = () => {
+    const quantidadeTotal = consignacaoSelecionada?.quantidade_total || consignacaoSelecionada?.quantidadeTotal || 0;
+    const valorTotal = consignacaoSelecionada?.valor_total || consignacaoSelecionada?.valorTotal || 0;
+    
+    const quantidadeVendida = quantidadeTotal - dadosRetorno.quantidadeRetornada;
+    const valorUnitario = quantidadeTotal > 0 ? valorTotal / quantidadeTotal : 0;
+    const valorDevido = quantidadeVendida * valorUnitario;
+    
+    setDadosRetorno(prev => ({
+      ...prev,
+      quantidadeVendida,
+      valorDevido
+    }));
+  };
+
+  // Finalizar consignação
+  const handleFinalizarConsignacao = async () => {
+    if (!consignacaoSelecionada) return;
+
+    setCarregando(true);
+    try {
+      const resultado = await finalizarConsignacao(consignacaoSelecionada.id, dadosRetorno);
+
+      if (resultado.success) {
+        mostrarMensagem('success', 'Consignação finalizada com sucesso!');
+        fecharModal();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao finalizar consignação');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro inesperado ao finalizar consignação');
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  // Excluir consignação
+  const handleExcluir = async (consignacao: any) => {
+    const nomeCliente = consignacao.cliente_nome || consignacao.clienteNome || 'Cliente';
+    if (!window.confirm(`Tem certeza que deseja excluir a consignação de "${nomeCliente}"?`)) {
+      return;
+    }
+
+    try {
+      const resultado = await excluirConsignacao(consignacao.id);
+      if (resultado.success) {
+        mostrarMensagem('success', 'Consignação excluída com sucesso!');
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao excluir consignação');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro inesperado ao excluir consignação');
+    }
+  };
+
+  const obterStatusColor = (status: string) => {
+    switch (status) {
+      case 'ativa':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'finalizada':
+        return 'bg-green-100 text-green-800';
+      case 'cancelada':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const obterStatusIcone = (status: string) => {
+    switch (status) {
+      case 'ativa':
+        return <Clock size={16} />;
+      case 'finalizada':
+        return <CheckCircle size={16} />;
+      case 'cancelada':
+        return <X size={16} />;
+      default:
+        return <Package size={16} />;
+    }
+  };
 
   return (
-    <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
-      <div className="container mx-auto px-4 py-6">
+    <div className={`min-h-screen ${tema.background} p-6`}>
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className={`text-2xl font-bold ${tema.texto} flex items-center`}>
-              <ShoppingCart className="mr-3 h-6 w-6" />
+            <h1 className={`text-3xl font-bold ${tema.text} mb-2`}>
               Consignações
             </h1>
-            <p className={`text-sm ${tema.textoSecundario}`}>
-              Gerencie as consignações do sistema
+            <p className={tema.textSecondary}>
+              Gerencie todas as consignações
             </p>
           </div>
           
           <button
-            onClick={abrirModal}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+            onClick={abrirModalNovo}
+            className={`
+              ${tema.primary} text-white px-6 py-3 rounded-lg 
+              hover:opacity-90 transition-opacity
+              flex items-center space-x-2 mt-4 md:mt-0
+            `}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Consignação
+            <Plus size={20} />
+            <span>Nova Consignação</span>
           </button>
         </div>
 
-        {/* Estatísticas */}
-        <EstatisticasConsignacoes />
-
         {/* Filtros */}
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
+        <div className={`${tema.surface} rounded-lg shadow-sm p-6 mb-6`}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                Buscar
-              </label>
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textoSecundario} h-4 w-4`} />
-                <input
-                  type="text"
-                  value={buscaTexto}
-                  onChange={(e) => setBuscaTexto(e.target.value)}
-                  placeholder="Cliente, documento ou vendedor..."
-                  className={`w-full pl-10 pr-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
-                />
+            {/* Busca */}
+            <div className="relative">
+              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textSecondary}`} size={20} />
+              <input
+                type="text"
+                placeholder="Buscar por cliente, documento ou vendedor..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className={`
+                  w-full pl-10 pr-4 py-2 border ${tema.border} rounded-lg
+                  focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                  ${tema.text}
+                `}
+              />
+            </div>
+
+            {/* Filtro Status */}
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className={`
+                px-4 py-2 border ${tema.border} rounded-lg
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                ${tema.text}
+              `}
+            >
+              <option value="todos">Todos os Status</option>
+              <option value="ativa">Ativas</option>
+              <option value="finalizada">Finalizadas</option>
+              <option value="cancelada">Canceladas</option>
+            </select>
+
+            {/* Ordenação */}
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as 'data' | 'valor' | 'cliente')}
+              className={`
+                px-4 py-2 border ${tema.border} rounded-lg
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                ${tema.text}
+              `}
+            >
+              <option value="data">Ordenar por Data</option>
+              <option value="valor">Ordenar por Valor</option>
+              <option value="cliente">Ordenar por Cliente</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Lista de consignações */}
+        <div className="space-y-4">
+          {consignacoesOrdenadas.map((consignacao: any) => (
+            <div key={consignacao.id} className={`${tema.surface} rounded-lg shadow-sm p-6`}>
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex-1">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className={`text-lg font-semibold ${tema.text} mb-1`}>
+                        {consignacao.cliente_nome || consignacao.clienteNome}
+                      </h3>
+                      <p className={`${tema.textSecondary} text-sm`}>
+                        {formatarDocumento(
+                          consignacao.cliente_documento || consignacao.clienteDocumento || '',
+                          consignacao.tipo_documento || consignacao.tipoDocumento || 'cpf'
+                        )}
+                      </p>
+                    </div>
+                    
+                    <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-1 ${obterStatusColor(consignacao.status)}`}>
+                      {obterStatusIcone(consignacao.status)}
+                      <span className="capitalize">{consignacao.status}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className={tema.textSecondary}>Vendedor</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacao.vendedor?.nome || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Quantidade</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacao.quantidade_total || consignacao.quantidadeTotal || 0} itens
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Valor Total</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {formatarMoeda(consignacao.valor_total || consignacao.valorTotal || 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Data</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {formatarData(
+                          consignacao.data_consignacao || 
+                          consignacao.dataConsignacao || 
+                          consignacao.created_at || 
+                          new Date().toISOString()
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 mt-4 lg:mt-0">
+                  <button
+                    onClick={() => abrirDetalhes(consignacao)}
+                    className={`p-2 ${tema.textSecondary} hover:${tema.text} transition-colors`}
+                    title="Ver detalhes"
+                  >
+                    <Eye size={18} />
+                  </button>
+                  
+                  {consignacao.status === 'ativa' && (
+                    <button
+                      onClick={() => abrirRetorno(consignacao)}
+                      className="p-2 text-green-600 hover:text-green-800 transition-colors"
+                      title="Finalizar consignação"
+                    >
+                      <CheckCircle size={18} />
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => handleExcluir(consignacao)}
+                    className="p-2 text-red-500 hover:text-red-700 transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </div>
-            
-            <div>
-              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                Status
-              </label>
-              <select
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
-              >
-                <option value="todas">Todas</option>
-                <option value="ativa">Ativas</option>
-                <option value="finalizada">Finalizadas</option>
-                <option value="cancelada">Canceladas</option>
-              </select>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Lista de Consignações */}
-        <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden`}>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
-              <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Cliente
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Vendedor
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Quantidade
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Valor Total
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Status
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-                {consignacoesFiltradas.map((consignacao) => (
-                  <tr key={consignacao.id} className={`${tema.hover} table-hover-row`}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className={`text-sm font-medium ${tema.texto}`}>
-                          {consignacao.cliente_nome}
-                        </div>
-                        <div className={`text-sm ${tema.textoSecundario}`}>
-                          {consignacao.cliente_documento}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm ${tema.texto}`}>
-                        {consignacao.vendedor?.nome || 'Vendedor não encontrado'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm ${tema.texto}`}>
-                        {consignacao.quantidade_total} itens
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm font-medium ${tema.texto}`}>
-                        {formatarMoedaBR(consignacao.valor_total)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        consignacao.status === 'ativa'
-                          ? 'bg-orange-100 text-orange-800'
-                          : consignacao.status === 'finalizada'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {consignacao.status === 'ativa' && 'Ativa'}
-                        {consignacao.status === 'finalizada' && 'Finalizada'}
-                        {consignacao.status === 'cancelada' && 'Cancelada'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => abrirModalDetalhes(consignacao)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {consignacao.status === 'ativa' && (
-                          <button
-                            onClick={() => abrirModalRetorno(consignacao)}
-                            className="text-green-600 hover:text-green-700"
-                            title="Conferir retorno"
-                          >
-                            <QrCode className="h-4 w-4" />
-                          </button>
-                        )}
-                        {tipoUsuario === 'admin' && (
-                          <button
-                            onClick={() => excluirConsignacao(consignacao)}
-                            className="text-red-600 hover:text-red-700"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {consignacoesOrdenadas.length === 0 && (
+          <div className={`${tema.surface} rounded-lg shadow-sm p-12 text-center`}>
+            <Package size={48} className={`${tema.textSecondary} mx-auto mb-4`} />
+            <h3 className={`text-lg font-medium ${tema.text} mb-2`}>
+              Nenhuma consignação encontrada
+            </h3>
+            <p className={tema.textSecondary}>
+              {busca || filtroStatus !== 'todos' 
+                ? 'Tente ajustar os filtros de busca' 
+                : 'Crie sua primeira consignação para começar'}
+            </p>
           </div>
+        )}
+      </div>
 
-          {consignacoesFiltradas.length === 0 && (
-            <div className="text-center py-12">
-              <ShoppingCart className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
-              <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
-                Nenhuma consignação encontrada
-              </h3>
-              <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
-                {consignacoes.length === 0 
-                  ? 'Comece criando sua primeira consignação.'
-                  : 'Tente ajustar os filtros de busca.'
-                }
-              </p>
-            </div>
-          )}
-        </div>
+      {/* Modal Nova Consignação */}
+      {modalAberto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto`}>
+            <div className="p-6">
+              <h2 className={`text-xl font-bold ${tema.text} mb-6`}>
+                Nova Consignação
+              </h2>
 
-        {/* Modal Nova Consignação */}
-        {modalAberto && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModal}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
-                    Nova Consignação
+              <div className="space-y-6">
+                {/* Dados do Cliente */}
+                <div>
+                  <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                    Dados do Cliente
                   </h3>
-                  
-                  <div className="space-y-4">
-                    {/* Nome do Cliente */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                         Nome do Cliente *
                       </label>
                       <input
                         type="text"
-                        value={formConsignacao.clienteNome}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, clienteNome: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.clienteNome ? 'border-red-500' : tema.borda}`}
-                        placeholder="Nome completo do cliente"
+                        value={formData.clienteNome}
+                        onChange={(e) => setFormData({ ...formData, clienteNome: e.target.value })}
+                        className={`
+                          w-full px-3 py-2 border rounded-lg
+                          focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                          ${erros.clienteNome ? 'border-red-500' : tema.border}
+                        `}
+                        placeholder="Digite o nome do cliente"
                       />
-                      {formErrors.clienteNome && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.clienteNome}</p>
+                      {erros.clienteNome && (
+                        <p className="text-red-500 text-sm mt-1">{erros.clienteNome}</p>
                       )}
                     </div>
 
-                    {/* Tipo de Documento */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Tipo de Documento *
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                        Tipo de Documento
                       </label>
                       <select
-                        value={formConsignacao.tipoDocumento}
-                        onChange={(e) => setFormConsignacao(prev => ({ 
-                          ...prev, 
-                          tipoDocumento: e.target.value as 'cpf' | 'cnpj',
-                          clienteDocumento: ''
-                        }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
+                        value={formData.tipoDocumento}
+                        onChange={(e) => setFormData({ ...formData, tipoDocumento: e.target.value as 'cpf' | 'cnpj' })}
+                        className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                       >
                         <option value="cpf">CPF</option>
                         <option value="cnpj">CNPJ</option>
                       </select>
                     </div>
 
-                    {/* Documento */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        {formConsignacao.tipoDocumento.toUpperCase()} *
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                        {formData.tipoDocumento.toUpperCase()} *
                       </label>
                       <input
                         type="text"
-                        value={formConsignacao.clienteDocumento}
-                        onChange={(e) => {
-                          const valor = e.target.value;
-                          const formatado = formConsignacao.tipoDocumento === 'cpf' 
-                            ? formatarCPF(valor) 
-                            : formatarCNPJ(valor);
-                          setFormConsignacao(prev => ({ ...prev, clienteDocumento: formatado }));
-                        }}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.clienteDocumento ? 'border-red-500' : tema.borda}`}
-                        placeholder={formConsignacao.tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+                        value={formData.clienteDocumento}
+                        onChange={(e) => setFormData({ ...formData, clienteDocumento: e.target.value })}
+                        className={`
+                          w-full px-3 py-2 border rounded-lg
+                          focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                          ${erros.clienteDocumento ? 'border-red-500' : tema.border}
+                        `}
+                        placeholder={`Digite o ${formData.tipoDocumento.toUpperCase()}`}
                       />
-                      {formErrors.clienteDocumento && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.clienteDocumento}</p>
+                      {erros.clienteDocumento && (
+                        <p className="text-red-500 text-sm mt-1">{erros.clienteDocumento}</p>
                       )}
                     </div>
 
-                    {/* Telefone */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                         Telefone *
                       </label>
                       <input
                         type="text"
-                        value={formConsignacao.clienteTelefone}
-                        onChange={(e) => setFormConsignacao(prev => ({ 
-                          ...prev, 
-                          clienteTelefone: formatarTelefone(e.target.value)
-                        }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.clienteTelefone ? 'border-red-500' : tema.borda}`}
-                        placeholder="(00) 00000-0000"
+                        value={formData.clienteTelefone}
+                        onChange={(e) => setFormData({ ...formData, clienteTelefone: e.target.value })}
+                        className={`
+                          w-full px-3 py-2 border rounded-lg
+                          focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                          ${erros.clienteTelefone ? 'border-red-500' : tema.border}
+                        `}
+                        placeholder="Digite o telefone"
                       />
-                      {formErrors.clienteTelefone && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.clienteTelefone}</p>
+                      {erros.clienteTelefone && (
+                        <p className="text-red-500 text-sm mt-1">{erros.clienteTelefone}</p>
                       )}
                     </div>
+                  </div>
+                </div>
 
-                    {/* Vendedor */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Vendedor *
+                {/* Vendedor */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Vendedor *
+                  </label>
+                  <select
+                    value={formData.vendedorId}
+                    onChange={(e) => setFormData({ ...formData, vendedorId: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${erros.vendedorId ? 'border-red-500' : tema.border}
+                    `}
+                  >
+                    <option value="">Selecione um vendedor</option>
+                    {vendedores.map((vendedor: any) => (
+                      <option key={vendedor.id} value={vendedor.id}>
+                        {vendedor.nome}
+                      </option>
+                    ))}
+                  </select>
+                  {erros.vendedorId && (
+                    <p className="text-red-500 text-sm mt-1">{erros.vendedorId}</p>
+                  )}
+                </div>
+
+                {/* Produtos */}
+                <div>
+                  <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                    Produtos da Consignação
+                  </h3>
+                  
+                  <div className="flex flex-col md:flex-row md:items-end space-y-4 md:space-y-0 md:space-x-4 mb-4">
+                    <div className="flex-1">
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                        Produto
                       </label>
                       <select
-                        value={formConsignacao.vendedorId}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, vendedorId: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.vendedorId ? 'border-red-500' : tema.borda}`}
-                        disabled={tipoUsuario === 'vendedor'}
+                        value={produtoSelecionado}
+                        onChange={(e) => setProdutoSelecionado(e.target.value)}
+                        className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                       >
-                        <option value="">Selecione um vendedor</option>
-                        {vendedores.filter(v => v.status === 'Ativo').map(vendedor => (
-                          <option key={vendedor.id} value={vendedor.id}>
-                            {vendedor.nome}
+                        <option value="">Selecione um produto</option>
+                        {produtos.map((produto: any) => (
+                          <option key={produto.id} value={produto.id}>
+                            {produto.nome} - {formatarMoeda(produto.valor_venda || produto.valorVenda || 0)}
                           </option>
                         ))}
                       </select>
-                      {formErrors.vendedorId && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.vendedorId}</p>
-                      )}
                     </div>
 
-                    {/* Quantidade Total */}
                     <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Quantidade Total *
+                      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                        Quantidade
                       </label>
                       <input
                         type="number"
                         min="1"
-                        value={formConsignacao.quantidadeTotal}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, quantidadeTotal: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.quantidadeTotal ? 'border-red-500' : tema.borda}`}
-                        placeholder="Quantidade de produtos"
+                        value={quantidadeProduto}
+                        onChange={(e) => setQuantidadeProduto(e.target.value)}
+                        className={`w-32 px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                        placeholder="Qtd"
                       />
-                      {formErrors.quantidadeTotal && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.quantidadeTotal}</p>
-                      )}
                     </div>
 
-                    {/* Valor Total */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Valor Total *
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formConsignacao.valorTotal}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, valorTotal: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.valorTotal ? 'border-red-500' : tema.borda}`}
-                        placeholder="0,00"
-                      />
-                      {formErrors.valorTotal && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.valorTotal}</p>
-                      )}
-                    </div>
-
-                    {/* Observações */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Observações
-                      </label>
-                      <textarea
-                        value={formConsignacao.observacoes}
-                        onChange={(e) => setFormConsignacao(prev => ({ ...prev, observacoes: e.target.value }))}
-                        rows={3}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
-                        placeholder="Observações adicionais..."
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3 pt-6">
                     <button
-                      onClick={fecharModal}
-                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
+                      onClick={adicionarProduto}
+                      className={`${tema.primary} text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity`}
                     >
-                      <X className="mr-2 h-4 w-4 inline" />
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={salvarConsignacao}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Criar Consignação
+                      Adicionar
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Modal Conferência de Retorno */}
-        {modalRetornoAberto && consignacaoRetorno && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalRetorno}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-5xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[90vh] overflow-y-auto">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
-                    <QrCode className="inline mr-2 h-5 w-5" />
-                    Conferência de Retorno - {consignacaoRetorno.cliente_nome}
-                  </h3>
-                  
-                  <div className="space-y-6">
-                    {/* Resumo da Consignação Original */}
-                    <div className={`p-4 border rounded-md ${tema.borda} ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-blue-50'}`}>
-                      <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
-                        <Package className="mr-2 h-4 w-4" />
-                        Dados da Consignação
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className={`font-medium ${tema.textoSecundario}`}>Cliente:</span>
-                          <p className={tema.texto}>{consignacaoRetorno.cliente_nome}</p>
-                        </div>
-                        <div>
-                          <span className={`font-medium ${tema.textoSecundario}`}>Quantidade Total:</span>
-                          <p className={tema.texto}>{consignacaoRetorno.quantidade_total} produtos</p>
-                        </div>
-                        <div>
-                          <span className={`font-medium ${tema.textoSecundario}`}>Valor Total:</span>
-                          <p className={tema.texto}>{formatarMoedaBR(consignacaoRetorno.valor_total)}</p>
-                        </div>
-                      </div>
-                    </div>
+                  {erros.produtos && (
+                    <p className="text-red-500 text-sm mb-4">{erros.produtos}</p>
+                  )}
 
-                    {/* Campo de Leitura de Código */}
-                    <div className={`p-4 border rounded-md ${tema.borda}`}>
-                      <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
-                        <Scan className="mr-2 h-4 w-4" />
-                        Leitura de Código de Barras
-                      </h4>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={codigoLeitura}
-                          onChange={(e) => setCodigoLeitura(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && lerCodigoRetorno()}
-                          placeholder="Digite ou escaneie o código de barras"
-                          className={`flex-1 border rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input}`}
-                          autoFocus
-                        />
-                        <button
-                          onClick={lerCodigoRetorno}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Adicionar
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Produtos Lidos */}
-                    {produtosLidos.length > 0 && (
-                      <div className={`p-4 border rounded-md ${tema.borda}`}>
-                        <h4 className={`font-medium ${tema.texto} mb-3 flex items-center`}>
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                          Produtos Retornados ({produtosLidos.reduce((acc, pl) => acc + pl.quantidade, 0)})
-                        </h4>
-                        <div className="space-y-2 max-h-40 overflow-y-auto">
-                          {produtosLidos.map((produtoLido, index) => (
-                            <div key={index} className={`flex items-center justify-between p-2 ${tema.fundo === 'bg-gray-900' ? 'bg-gray-700' : 'bg-gray-50'} rounded`}>
-                              <div className="flex-1">
-                                <p className={`font-medium ${tema.texto}`}>{produtoLido.produto.nome}</p>
-                                <p className={`text-sm ${tema.textoSecundario}`}>
-                                  Qtd: {produtoLido.quantidade} × {formatarMoedaBR(produtoLido.produto.valorVenda)} = {formatarMoedaBR(produtoLido.quantidade * produtoLido.produto.valorVenda)}
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => removerProdutoLido(produtoLido.produto.id)}
-                                className="ml-2 text-red-600 hover:text-red-700 p-1"
-                                title="Remover produto"
-                              >
-                                <Minus className="h-4 w-4" />
-                              </button>
-                            </div>
+                  {/* Lista de produtos adicionados */}
+                  {produtosConsignacao.length > 0 && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className={`${tema.background}`}>
+                          <tr>
+                            <th className={`px-4 py-3 text-left text-sm font-medium ${tema.text}`}>
+                              Produto
+                            </th>
+                            <th className={`px-4 py-3 text-center text-sm font-medium ${tema.text}`}>
+                              Qtd
+                            </th>
+                            <th className={`px-4 py-3 text-right text-sm font-medium ${tema.text}`}>
+                              Valor Unit.
+                            </th>
+                            <th className={`px-4 py-3 text-right text-sm font-medium ${tema.text}`}>
+                              Total
+                            </th>
+                            <th className={`px-4 py-3 text-center text-sm font-medium ${tema.text}`}>
+                              Ações
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {produtosConsignacao.map((item, index) => (
+                            <tr key={index} className={`border-t ${tema.border}`}>
+                              <td className={`px-4 py-3 text-sm ${tema.text}`}>
+                                {item.produto.nome}
+                              </td>
+                              <td className={`px-4 py-3 text-center text-sm ${tema.text}`}>
+                                {item.quantidade}
+                              </td>
+                              <td className={`px-4 py-3 text-right text-sm ${tema.text}`}>
+                                {formatarMoeda(item.valorUnitario)}
+                              </td>
+                              <td className={`px-4 py-3 text-right text-sm ${tema.text}`}>
+                                {formatarMoeda(item.valorTotal)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  onClick={() => removerProduto(item.produtoId)}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </td>
+                            </tr>
                           ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Resumo do Retorno */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className={`p-4 border rounded-md ${tema.borda}`}>
-                        <h4 className={`font-medium ${tema.texto} mb-2`}>Produtos Retornados</h4>
-                        <p className={`text-2xl font-bold ${tema.texto}`}>{retornoForm.quantidadeRetornada}</p>
-                        <p className={`text-sm ${tema.textoSecundario}`}>
-                          Valor: {formatarMoedaBR(retornoForm.valorRetornado)}
-                        </p>
-                      </div>
-                      
-                      <div className={`p-4 border rounded-md ${tema.borda} ${
-                        (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) >= 0 
-                          ? tema.fundo === 'bg-gray-900' ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-200'
-                          : tema.fundo === 'bg-gray-900' ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'
-                      }`}>
-                        <div className="text-center">
-                          <p className={`text-sm ${tema.textoSecundario} mb-1`}>Cliente deve pagar:</p>
-                          <p className={`text-2xl font-bold ${
-                            (consignacaoRetorno.valorTotal - retornoForm.valorRetornado) >= 0 
-                              ? 'text-green-600' 
-                              : 'text-red-600'
-                          }`}>
-                            {formatarMoedaBR(consignacaoRetorno.valorTotal - retornoForm.valorRetornado)}
-                          </p>
-                          {(consignacaoRetorno.valorTotal - retornoForm.valorRetornado) < 0 && (
-                            <p className="text-xs text-red-600 mt-1">Valor negativo - verificar retorno</p>
-                          )}
-                        </div>
-                      </div>
+                        </tbody>
+                        <tfoot className={`${tema.background} border-t ${tema.border}`}>
+                          <tr>
+                            <td colSpan={2} className={`px-4 py-3 text-sm font-medium ${tema.text}`}>
+                              Total: {calcularTotais().quantidadeTotal} itens
+                            </td>
+                            <td colSpan={3} className={`px-4 py-3 text-right text-sm font-medium ${tema.text}`}>
+                              {formatarMoeda(calcularTotais().valorTotal)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3 pt-6">
-                    <button
-                      onClick={fecharModalRetorno}
-                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
-                    >
-                      <X className="mr-2 h-4 w-4 inline" />
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={abrirModalConfirmacao}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Finalizar Consignação
-                    </button>
-                  </div>
+                  )}
                 </div>
+
+                {/* Observações */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Observações
+                  </label>
+                  <textarea
+                    value={formData.observacoes}
+                    onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
+                    rows={3}
+                    className={`w-full px-3 py-2 border ${tema.border} rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                    placeholder="Observações adicionais..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8">
+                <button
+                  onClick={fecharModal}
+                  disabled={carregando}
+                  className={`
+                    px-4 py-2 border ${tema.border} rounded-lg
+                    ${tema.text} hover:${tema.hover} transition-colors
+                    disabled:opacity-50
+                  `}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarConsignacao}
+                  disabled={carregando || produtosConsignacao.length === 0}
+                  className={`
+                    ${tema.primary} text-white px-4 py-2 rounded-lg
+                    hover:opacity-90 transition-opacity
+                    disabled:opacity-50
+                  `}
+                >
+                  {carregando ? 'Salvando...' : 'Salvar Consignação'}
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Modal Detalhes */}
-        {modalDetalhesAberto && consignacaoDetalhes && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalDetalhes}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4 max-h-[90vh] overflow-y-auto">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-4 flex items-center`}>
-                    <Eye className="mr-2 h-5 w-5" />
-                    Detalhes da Consignação
+      {/* Modal de Detalhes */}
+      {modalDetalhes && consignacaoSelecionada && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
+            <div className="p-6">
+              <h2 className={`text-xl font-bold ${tema.text} mb-6`}>
+                Detalhes da Consignação
+              </h2>
+
+              <div className="space-y-6">
+                {/* Informações do Cliente */}
+                <div>
+                  <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                    Cliente
                   </h3>
-                  
-                  <div className="space-y-6">
-                    {/* Informações do Cliente */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h3 className={`text-lg font-medium ${tema.texto} mb-3 flex items-center`}>
-                        <User className="mr-2 h-5 w-5" />
-                        Cliente
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Nome:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_nome}</p>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>
-                            {consignacaoDetalhes.tipo_documento.toUpperCase()}:
-                          </span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_documento}</p>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Telefone:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.cliente_telefone}</p>
-                        </div>
-                      </div>
+                      <p className={tema.textSecondary}>Nome</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacaoSelecionada.cliente_nome || consignacaoSelecionada.clienteNome}
+                      </p>
                     </div>
-
-                    {/* Informações da Consignação */}
                     <div>
-                      <h3 className={`text-lg font-medium ${tema.texto} mb-3 flex items-center`}>
-                        <Package className="mr-2 h-5 w-5" />
-                        Consignação
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Vendedor:</span>
-                          <p className={`text-sm ${tema.texto}`}>{consignacaoDetalhes.vendedor?.nome || 'Vendedor não encontrado'}</p>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Data:</span>
-                          <p className={`text-sm ${tema.texto}`}>
-                            {new Date(consignacaoDetalhes.data_consignacao || consignacaoDetalhes.created_at).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Status:</span>
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            consignacaoDetalhes.status === 'ativa'
-                              ? 'bg-orange-100 text-orange-800'
-                              : consignacaoDetalhes.status === 'finalizada'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {consignacaoDetalhes.status}
-                          </span>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Valor Total:</span>
-                          <p className={`text-sm font-bold ${tema.texto}`}>
-                            {formatarMoedaBR(consignacaoDetalhes.valor_total)}
-                          </p>
-                        </div>
-                        <div>
-                          <span className={`text-sm font-medium ${tema.textoSecundario}`}>Quantidade:</span>
-                          <p className={`text-sm ${tema.texto}`}>
-                            {consignacaoDetalhes.quantidade_total} itens
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Observações */}
-                    {consignacaoDetalhes.observacoes && (
-                      <div>
-                        <h3 className={`text-lg font-medium ${tema.texto} mb-3 flex items-center`}>
-                          <FileText className="mr-2 h-5 w-5" />
-                          Observações
-                        </h3>
-                        <p className={`text-sm ${tema.texto} ${tema.papel} p-3 rounded-lg border ${tema.borda}`}>
-                          {consignacaoDetalhes.observacoes}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Resultado da Consignação */}
-                    {consignacaoDetalhes.retorno && consignacaoDetalhes.retorno.length > 0 && (
-                      <div>
-                        <h3 className={`text-lg font-medium ${tema.texto} mb-3 flex items-center`}>
-                          <Calculator className="mr-2 h-5 w-5" />
-                          Resultado
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
-                            <p className={`text-sm ${tema.textoSecundario}`}>Retornados</p>
-                            <p className={`text-xl font-bold ${tema.texto}`}>
-                              {consignacaoDetalhes.retorno[0].quantidade_retornada}
-                            </p>
-                          </div>
-                          <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
-                            <p className={`text-sm ${tema.textoSecundario}`}>Vendidos</p>
-                            <p className={`text-xl font-bold text-green-600`}>
-                              {consignacaoDetalhes.retorno[0].quantidade_vendida}
-                            </p>
-                          </div>
-                          <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
-                            <p className={`text-sm ${tema.textoSecundario}`}>Valor Retornado</p>
-                            <p className={`text-lg font-bold ${tema.texto}`}>
-                              {formatarMoedaBR(consignacaoDetalhes.retorno[0].valor_retornado)}
-                            </p>
-                          </div>
-                          <div className={`${tema.papel} p-3 rounded-lg border ${tema.borda} text-center`}>
-                            <p className={`text-sm ${tema.textoSecundario}`}>Valor Devido</p>
-                            <p className={`text-lg font-bold ${consignacaoDetalhes.retorno[0].valor_devido >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatarMoedaBR(consignacaoDetalhes.retorno[0].valor_devido)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end space-x-3 pt-6">
-                    <button
-                      onClick={fecharModalDetalhes}
-                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover}`}
-                    >
-                      <X className="mr-2 h-4 w-4 inline" />
-                      Fechar
-                    </button>
-                    {consignacaoDetalhes.status === 'ativa' && (
-                      <button
-                        onClick={() => {
-                          fecharModalDetalhes();
-                          abrirModalRetorno(consignacaoDetalhes);
-                        }}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
-                      >
-                        <QrCode className="mr-2 h-4 w-4" />
-                        Conferir Retorno
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de Confirmação de Finalização */}
-        {modalConfirmacaoAberto && consignacaoRetorno && (
-          <div className="fixed inset-0 z-[60] overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={fecharModalConfirmacao}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="sm:flex sm:items-start">
-                    <div className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${
-                      retornoForm.quantidadeRetornada === 0 
-                        ? 'bg-yellow-100' 
-                        : 'bg-green-100'
-                    } sm:mx-0 sm:h-10 sm:w-10`}>
-                      {retornoForm.quantidadeRetornada === 0 ? (
-                        <AlertTriangle className={`h-6 w-6 ${
-                          retornoForm.quantidadeRetornada === 0 
-                            ? 'text-yellow-600' 
-                            : 'text-green-600'
-                        }`} />
-                      ) : (
-                        <CheckCircle className="h-6 w-6 text-green-600" />
-                      )}
-                    </div>
-                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
-                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
-                        Confirmar Finalização da Consignação
-                      </h3>
-                      <div className="mt-4">
-                        <div className={`${tema.papel} border ${tema.borda} rounded-lg p-4 mb-4`}>
-                          <h4 className={`font-medium ${tema.texto} mb-3`}>Resumo da Operação</h4>
-                          
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className={`font-medium ${tema.textoSecundario}`}>Cliente:</span>
-                              <p className={tema.texto}>{consignacaoRetorno.cliente_nome}</p>
-                            </div>
-                            <div>
-                              <span className={`font-medium ${tema.textoSecundario}`}>Vendedor:</span>
-                              <p className={tema.texto}>{consignacaoRetorno.vendedor?.nome || 'Vendedor não encontrado'}</p>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="text-center">
-                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Consignados</p>
-                                <p className={`text-xl font-bold ${tema.texto}`}>
-                                  {consignacaoRetorno.quantidade_total}
-                                </p>
-                                <p className={`text-sm ${tema.textoSecundario}`}>
-                                  {formatarMoedaBR(consignacaoRetorno.valor_total)}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Retornados</p>
-                                <p className={`text-xl font-bold ${retornoForm.quantidadeRetornada > 0 ? 'text-blue-600' : tema.texto}`}>
-                                  {retornoForm.quantidadeRetornada}
-                                </p>
-                                <p className={`text-sm ${tema.textoSecundario}`}>
-                                  {formatarMoedaBR(retornoForm.valorRetornado)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className={`mt-4 pt-4 border-t border-gray-200 ${
-                            (consignacaoRetorno.quantidadeTotal - retornoForm.quantidadeRetornada) > 0 
-                              ? 'bg-green-50 border-green-200 p-3 rounded-lg' 
-                              : ''
-                          }`}>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="text-center">
-                                <p className={`text-sm ${tema.textoSecundario}`}>Produtos Vendidos</p>
-                                <p className={`text-2xl font-bold ${
-                                  (consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada) > 0 
-                                    ? 'text-green-600' 
-                                    : tema.texto
-                                }`}>
-                                  {consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada}
-                                </p>
-                              </div>
-                              <div className="text-center">
-                                <p className={`text-sm ${tema.textoSecundario}`}>Valor a Receber</p>
-                                <p className={`text-2xl font-bold ${
-                                  (consignacaoRetorno.valor_total - retornoForm.valorRetornado) > 0 
-                                    ? 'text-green-600' 
-                                    : (consignacaoRetorno.valor_total - retornoForm.valorRetornado) === 0
-                                    ? tema.texto
-                                    : 'text-red-600'
-                                }`}>
-                                  {formatarMoedaBR(consignacaoRetorno.valor_total - retornoForm.valorRetornado)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Mensagens baseadas no cenário */}
-                        {retornoForm.quantidadeRetornada === 0 ? (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                            <div className="flex">
-                              <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h4 className="text-sm font-medium text-yellow-800">
-                                  Nenhum produto retornado
-                                </h4>
-                                <p className="text-sm text-yellow-700 mt-1">
-                                  Você está finalizando esta consignação sem produtos retornados. 
-                                  Isso significa que o cliente vendeu todos os {consignacaoRetorno.quantidade_total} produtos 
-                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valor_total)}.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                            <div className="flex">
-                              <CheckCircle className="h-5 w-5 text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
-                              <div>
-                                <h4 className="text-sm font-medium text-blue-800">
-                                  Retorno processado
-                                </h4>
-                                <p className="text-sm text-blue-700 mt-1">
-                                  {retornoForm.quantidadeRetornada} produto(s) retornado(s) no valor de {formatarMoedaBR(retornoForm.valorRetornado)}. 
-                                  O cliente vendeu {consignacaoRetorno.quantidade_total - retornoForm.quantidadeRetornada} produto(s) 
-                                  e deve pagar {formatarMoedaBR(consignacaoRetorno.valor_total - retornoForm.valorRetornado)}.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
+                      <p className={tema.textSecondary}>Documento</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {formatarDocumento(
+                          consignacaoSelecionada.cliente_documento || consignacaoSelecionada.clienteDocumento || '',
+                          consignacaoSelecionada.tipo_documento || consignacaoSelecionada.tipoDocumento || 'cpf'
                         )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Telefone</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacaoSelecionada.cliente_telefone || consignacaoSelecionada.clienteTelefone}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Vendedor</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacaoSelecionada.vendedor?.nome || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-                        <p className={`text-sm ${tema.textoSecundario}`}>
-                          Ao confirmar, esta consignação será marcada como finalizada e não poderá ser alterada.
+                {/* Informações da Consignação */}
+                <div>
+                  <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                    Consignação
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className={tema.textSecondary}>Status</p>
+                      <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${obterStatusColor(consignacaoSelecionada.status)}`}>
+                        {obterStatusIcone(consignacaoSelecionada.status)}
+                        <span className="ml-1 capitalize">{consignacaoSelecionada.status}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Quantidade Total</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {consignacaoSelecionada.quantidade_total || consignacaoSelecionada.quantidadeTotal || 0} itens
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Valor Total</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {formatarMoeda(consignacaoSelecionada.valor_total || consignacaoSelecionada.valorTotal || 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={tema.textSecondary}>Data da Consignação</p>
+                      <p className={`font-medium ${tema.text}`}>
+                        {formatarData(
+                          consignacaoSelecionada.data_consignacao || 
+                          consignacaoSelecionada.dataConsignacao || 
+                          consignacaoSelecionada.created_at ||
+                          new Date().toISOString()
+                        )}
+                      </p>
+                    </div>
+                    {consignacaoSelecionada.data_retorno && (
+                      <div>
+                        <p className={tema.textSecondary}>Data do Retorno</p>
+                        <p className={`font-medium ${tema.text}`}>
+                          {formatarData(consignacaoSelecionada.data_retorno)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dados do Retorno (se finalizada) */}
+                {consignacaoSelecionada.status === 'finalizada' && consignacaoSelecionada.retorno && (
+                  <div>
+                    <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                      Retorno
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className={tema.textSecondary}>Quantidade Retornada</p>
+                        <p className={`font-medium ${tema.text}`}>
+                          {consignacaoSelecionada.retorno.quantidade_retornada || consignacaoSelecionada.retorno.quantidadeRetornada || 0} itens
+                        </p>
+                      </div>
+                      <div>
+                        <p className={tema.textSecondary}>Quantidade Vendida</p>
+                        <p className={`font-medium ${tema.text}`}>
+                          {consignacaoSelecionada.retorno.quantidade_vendida || consignacaoSelecionada.retorno.quantidadeVendida || 0} itens
+                        </p>
+                      </div>
+                      <div>
+                        <p className={tema.textSecondary}>Valor Retornado</p>
+                        <p className={`font-medium ${tema.text}`}>
+                          {formatarMoeda(consignacaoSelecionada.retorno.valor_retornado || consignacaoSelecionada.retorno.valorRetornado || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className={tema.textSecondary}>Valor Devido</p>
+                        <p className={`font-medium ${tema.text}`}>
+                          {formatarMoeda(consignacaoSelecionada.retorno.valor_devido || consignacaoSelecionada.retorno.valorDevido || 0)}
                         </p>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                    <button
-                      onClick={finalizarConsignacao}
-                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Confirmar Finalização
-                    </button>
-                    <button
-                      onClick={fecharModalConfirmacao}
-                      className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm`}
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Cancelar
-                    </button>
+                )}
+
+                {/* Observações */}
+                {consignacaoSelecionada.observacoes && (
+                  <div>
+                    <h3 className={`text-lg font-semibold ${tema.text} mb-4`}>
+                      Observações
+                    </h3>
+                    <p className={`${tema.text} bg-gray-50 p-4 rounded-lg`}>
+                      {consignacaoSelecionada.observacoes}
+                    </p>
                   </div>
-                </div>
+                )}
+              </div>
+
+              <div className="flex justify-end mt-8">
+                <button
+                  onClick={fecharModal}
+                  className={`
+                    px-4 py-2 border ${tema.border} rounded-lg
+                    ${tema.text} hover:${tema.hover} transition-colors
+                  `}
+                >
+                  Fechar
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Modal de Retorno */}
+      {modalRetorno && consignacaoSelecionada && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-lg`}>
+            <div className="p-6">
+              <h2 className={`text-xl font-bold ${tema.text} mb-6`}>
+                Finalizar Consignação
+              </h2>
+
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className={`font-semibold ${tema.text} mb-2`}>
+                    {consignacaoSelecionada.cliente_nome || consignacaoSelecionada.clienteNome}
+                  </h3>
+                  <p className={tema.textSecondary}>
+                    Total: {consignacaoSelecionada.quantidade_total || consignacaoSelecionada.quantidadeTotal || 0} itens - {formatarMoeda(consignacaoSelecionada.valor_total || consignacaoSelecionada.valorTotal || 0)}
+                  </p>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Quantidade Retornada
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={consignacaoSelecionada.quantidade_total || consignacaoSelecionada.quantidadeTotal || 0}
+                    value={dadosRetorno.quantidadeRetornada}
+                    onChange={(e) => setDadosRetorno({ ...dadosRetorno, quantidadeRetornada: parseInt(e.target.value) || 0 })}
+                    onBlur={calcularRetorno}
+                    className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Quantidade Vendida
+                    </label>
+                    <input
+                      type="number"
+                      value={dadosRetorno.quantidadeVendida}
+                      readOnly
+                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg bg-gray-50`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Valor Devido
+                    </label>
+                    <input
+                      type="text"
+                      value={formatarMoeda(dadosRetorno.valorDevido)}
+                      readOnly
+                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg bg-gray-50`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Observações do Retorno
+                  </label>
+                  <textarea
+                    value={dadosRetorno.observacoes}
+                    onChange={(e) => setDadosRetorno({ ...dadosRetorno, observacoes: e.target.value })}
+                    rows={3}
+                    className={`w-full px-3 py-2 border ${tema.border} rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                    placeholder="Observações sobre o retorno..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8">
+                <button
+                  onClick={fecharModal}
+                  disabled={carregando}
+                  className={`
+                    px-4 py-2 border ${tema.border} rounded-lg
+                    ${tema.text} hover:${tema.hover} transition-colors
+                    disabled:opacity-50
+                  `}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleFinalizarConsignacao}
+                  disabled={carregando}
+                  className={`
+                    bg-green-600 text-white px-4 py-2 rounded-lg
+                    hover:bg-green-700 transition-colors
+                    disabled:opacity-50
+                  `}
+                >
+                  {carregando ? 'Finalizando...' : 'Finalizar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

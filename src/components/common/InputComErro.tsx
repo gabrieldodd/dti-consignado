@@ -1,55 +1,56 @@
 // src/components/common/InputComErro.tsx
-import React, { memo } from 'react';
-import { AlertCircle } from 'lucide-react';
+import React from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 
 interface InputComErroProps {
   label: string;
-  valor: string;
-  onChange: (valor: string) => void;
-  tipo?: string;
-  placeholder?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   erro?: string;
-  obrigatorio?: boolean;
-  maxLength?: number;
-  className?: string;
+  type?: string;
+  placeholder?: string;
   disabled?: boolean;
+  className?: string;
+  required?: boolean;
 }
 
-export const InputComErro = memo<InputComErroProps>(({ 
-  label, 
-  valor, 
-  onChange, 
-  tipo = 'text', 
-  placeholder, 
-  erro, 
-  obrigatorio = false,
-  maxLength,
+export const InputComErro: React.FC<InputComErroProps> = ({
+  label,
+  value,
+  onChange,
+  erro,
+  type = 'text',
+  placeholder,
+  disabled = false,
   className = '',
-  disabled = false
+  required = false
 }) => {
   const { tema } = useAppContext();
 
   return (
-    <div>
-      <label className={`block text-sm font-medium ${tema.texto}`}>
-        {label} {obrigatorio && <span className="text-red-500">*</span>}
+    <div className="w-full">
+      <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       <input
-        type={tipo}
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={maxLength}
-        disabled={disabled}
-        className={`mt-1 block w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${tema.input} ${erro ? 'border-red-500' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}
+        type={type}
+        value={value}
+        onChange={onChange}
         placeholder={placeholder}
+        disabled={disabled}
+        className={`
+          mt-1 block w-full border rounded-md px-3 py-2 
+          focus:outline-none focus:ring-blue-500 focus:border-blue-500 
+          ${tema.text} ${tema.surface}
+          ${erro ? 'border-red-500' : tema.border} 
+          ${disabled ? 'opacity-50 cursor-not-allowed' : ''} 
+          ${className}
+        `}
       />
       {erro && (
-        <p className="mt-1 text-sm text-red-600 flex items-center">
-          <AlertCircle className="h-4 w-4 mr-1" />
-          {erro}
-        </p>
+        <p className="text-red-500 text-sm mt-1">{erro}</p>
       )}
     </div>
   );
-});
+};

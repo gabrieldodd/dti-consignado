@@ -1,940 +1,646 @@
 // src/components/screens/TelaProdutos.tsx
-import React, { useState, useCallback, useMemo, useEffect, memo } from 'react';
-import { 
-  Package, 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  AlertTriangle,
-  CheckCircle,
-  X,
-  Save,
-  BarChart3,
-  DollarSign,
-  Eye,
-  EyeOff,
-  Archive,
-  ArchiveRestore,
-  Tag
-} from 'lucide-react';
-
+import React, { useState, useMemo } from 'react';
+import { Plus, Search, Edit, Trash2, Package, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
-import { useFormatters } from '../../hooks/useFormatters';
-import { useValidation } from '../../hooks/useValidation';
 
-// Interfaces
-interface Produto {
-  id: number;
-  nome: string;
-  descricao: string;
-  codigo_barras: string;
-  categoria: string;
-  valor_custo: number;
-  valor_venda: number;
-  estoque: number;
-  estoque_minimo: number;
-  ativo: boolean;
-  data_cadastro: string;
-}
-
-interface ProdutoForm {
-  nome: string;
-  descricao: string;
-  codigoBarras: string;
-  categoria: string;
-  valorCusto: string;
-  valorVenda: string;
-  estoque: string;
-  estoqueMinimo: string;
-  ativo: boolean;
-}
-
-// Form inicial
-const FORM_INICIAL: ProdutoForm = {
-  nome: '',
-  descricao: '',
-  codigoBarras: '',
-  categoria: '',
-  valorCusto: '',
-  valorVenda: '',
-  estoque: '',
-  estoqueMinimo: '',
-  ativo: true
-};
-
-// Componente de estatísticas
-const EstatisticasProdutos = memo(() => {
-  const { tema, produtos, controleEstoqueHabilitado } = useAppContext();
-  
-  const estatisticas = useMemo(() => {
-    const ativos = produtos.filter(p => p.ativo).length;
-    const inativos = produtos.filter(p => !p.ativo).length;
-    const total = produtos.length;
-    const estoqueBaixo = produtos.filter(p => p.ativo && p.estoque <= p.estoque_minimo).length;
-    const valorTotalEstoque = produtos
-      .filter(p => p.ativo)
-      .reduce((acc, p) => acc + (p.valor_custo * p.estoque), 0);
-    
-    return { ativos, inativos, total, estoqueBaixo, valorTotalEstoque };
-  }, [produtos]);
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Total</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.total}</p>
-          </div>
-          <Package className="h-8 w-8 text-blue-600" />
-        </div>
-      </div>
-
-      <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={`text-sm ${tema.textoSecundario}`}>Ativos</p>
-            <p className={`text-2xl font-bold ${tema.texto}`}>{estatisticas.ativos}</p>
-          </div>
-          <CheckCircle className="h-8 w-8 text-green-600" />
-        </div>
-      </div>
-
-      {controleEstoqueHabilitado && (
-        <>
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Estoque Baixo</p>
-                <p className={`text-2xl font-bold ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : tema.texto}`}>
-                  {estatisticas.estoqueBaixo}
-                </p>
-              </div>
-              <AlertTriangle className={`h-8 w-8 ${estatisticas.estoqueBaixo > 0 ? 'text-red-600' : 'text-gray-400'}`} />
-            </div>
-          </div>
-
-          <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${tema.textoSecundario}`}>Valor Estoque</p>
-                <p className={`text-lg font-bold ${tema.texto}`}>
-                  R$ {estatisticas.valorTotalEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-purple-600" />
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-});
-
-// Componente principal
 export const TelaProdutos: React.FC = () => {
-  // Context e Hooks
   const { 
     tema, 
-    produtos,
+    produtos, 
     categorias,
+    adicionarProduto, 
+    atualizarProduto, 
+    excluirProduto, 
     mostrarMensagem,
-    cookies,
-    tipoUsuario,
-    controleEstoqueHabilitado,
-    adicionarProduto,
-    atualizarProduto,
-    excluirProduto,
-    loadingProdutos,
-    errorProdutos
+    formatarMoeda
   } = useAppContext();
-  
-  const { formatarMoedaBR } = useFormatters();
-  const { validarObrigatorio, validarNumeroPositivo, validarCodigoBarras } = useValidation();
 
-  // Loading e Erro
-  if (loadingProdutos) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className={`mt-4 ${tema.textoSecundario}`}>Carregando produtos...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (errorProdutos) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
-          <p className={`${tema.texto} font-medium mb-2`}>Erro ao carregar produtos</p>
-          <p className={`${tema.textoSecundario} text-sm mb-4`}>{errorProdutos}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Estados
+  const [busca, setBusca] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [ordenacao, setOrdenacao] = useState<'nome' | 'categoria' | 'estoque' | 'valor'>('nome');
   const [modalAberto, setModalAberto] = useState(false);
-  const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
-  const [produtoEditando, setProdutoEditando] = useState<Produto | null>(null);
-  const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null);
-  const [salvando, setSalvando] = useState(false);
-  
-  // Filtros
-  const [filtroCategoria, setFiltroCategoria] = useState(() => {
-    return cookies.getCookie('filtroCategoriasProdutos') || 'todas';
+  const [produtoEditando, setProdutoEditando] = useState<any>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  const [formData, setFormData] = useState({
+    nome: '',
+    descricao: '',
+    codigoBarras: '',
+    categoria: '',
+    valorCusto: '',
+    valorVenda: '',
+    estoque: '',
+    estoqueMinimo: ''
   });
-  const [filtroStatus, setFiltroStatus] = useState(() => {
-    return cookies.getCookie('filtroStatusProdutos') || 'todos';
-  });
-  const [buscaTexto, setBuscaTexto] = useState('');
 
-  // Estados do formulário
-  const [formProduto, setFormProduto] = useState<ProdutoForm>(FORM_INICIAL);
-  const [formErrors, setFormErrors] = useState<any>({});
+  const [erros, setErros] = useState<Record<string, string>>({});
 
-  // Salvar filtros nos cookies
-  useEffect(() => {
-    cookies.setCookie('filtroCategoriasProdutos', filtroCategoria, 30);
-  }, [filtroCategoria, cookies]);
+  // Produtos filtrados e ordenados
+  const produtosOrdenados = useMemo(() => {
+    let filtrados = produtos.filter((produto: any) => {
+      const buscaMatch = 
+        (produto.nome || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (produto.descricao || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (produto.codigo_barras || produto.codigoBarras || '').includes(busca);
 
-  useEffect(() => {
-    cookies.setCookie('filtroStatusProdutos', filtroStatus, 30);
-  }, [filtroStatus, cookies]);
+      const categoriaMatch = filtroCategoria === 'todas' || produto.categoria === filtroCategoria;
+      
+      let statusMatch = true;
+      if (filtroStatus === 'ativo') {
+        statusMatch = produto.ativo === true;
+      } else if (filtroStatus === 'inativo') {
+        statusMatch = produto.ativo === false;
+      } else if (filtroStatus === 'baixoEstoque') {
+        const estoque = produto.estoque || 0;
+        const estoqueMinimo = produto.estoque_minimo || produto.estoqueMinimo || 0;
+        statusMatch = estoque <= estoqueMinimo;
+      }
 
-  // Filtrar produtos
-  const produtosFiltrados = useMemo(() => {
-    let resultado = produtos;
+      return buscaMatch && categoriaMatch && statusMatch;
+    });
 
-    if (filtroCategoria !== 'todas') {
-      resultado = resultado.filter(p => p.categoria === filtroCategoria);
-    }
-
-    if (filtroStatus !== 'todos') {
-      const statusFiltro = filtroStatus === 'ativo';
-      resultado = resultado.filter(p => p.ativo === statusFiltro);
-    }
-
-    if (buscaTexto) {
-      resultado = resultado.filter(p => 
-        p.nome.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        p.descricao.toLowerCase().includes(buscaTexto.toLowerCase()) ||
-        p.codigo_barras.includes(buscaTexto)
-      );
-    }
-
-    return resultado;
-  }, [produtos, filtroCategoria, filtroStatus, buscaTexto]);
-
-  // Calcular margem
-  const calcularMargem = useCallback((valorCusto: number, valorVenda: number): number => {
-    if (valorCusto === 0) return 0;
-    return ((valorVenda - valorCusto) / valorCusto) * 100;
-  }, []);
-
-  // Handlers modais
-  const abrirModal = useCallback((produto?: Produto) => {
-    if (produto) {
-      setProdutoEditando(produto);
-      setFormProduto({
-        nome: produto.nome,
-        descricao: produto.descricao,
-        codigoBarras: produto.codigo_barras,
-        categoria: produto.categoria,
-        valorCusto: produto.valor_custo.toString(),
-        valorVenda: produto.valor_venda.toString(),
-        estoque: produto.estoque.toString(),
-        estoqueMinimo: produto.estoque_minimo.toString(),
-        ativo: produto.ativo
-      });
-    } else {
-      setProdutoEditando(null);
-      setFormProduto(FORM_INICIAL);
-    }
-    setFormErrors({});
-    setModalAberto(true);
-  }, []);
-
-  const fecharModal = useCallback(() => {
-    setModalAberto(false);
-    setProdutoEditando(null);
-    setFormProduto(FORM_INICIAL);
-    setFormErrors({});
-  }, []);
-
-  const abrirModalExclusao = useCallback((produto: Produto) => {
-    setProdutoParaExcluir(produto);
-    setModalExclusaoAberto(true);
-  }, []);
-
-  const fecharModalExclusao = useCallback(() => {
-    setModalExclusaoAberto(false);
-    setProdutoParaExcluir(null);
-  }, []);
+    return [...filtrados].sort((a: any, b: any) => {
+      switch (ordenacao) {
+        case 'categoria':
+          return (a.categoria || '').localeCompare(b.categoria || '');
+        case 'estoque':
+          return (b.estoque || 0) - (a.estoque || 0);
+        case 'valor':
+          const valorA = a.valor_venda || a.valorVenda || 0;
+          const valorB = b.valor_venda || b.valorVenda || 0;
+          return valorB - valorA;
+        default:
+          return (a.nome || '').localeCompare(b.nome || '');
+      }
+    });
+  }, [produtos, busca, filtroCategoria, filtroStatus, ordenacao]);
 
   // Validação do formulário
-  const validarFormulario = useCallback(() => {
-    const errors: any = {};
+  const validarFormulario = () => {
+    const novosErros: Record<string, string> = {};
 
-    if (!validarObrigatorio(formProduto.nome)) {
-      errors.nome = 'Nome é obrigatório';
+    if (!formData.nome.trim()) {
+      novosErros.nome = 'Nome é obrigatório';
     }
 
-    if (!validarObrigatorio(formProduto.codigoBarras)) {
-      errors.codigoBarras = 'Código de barras é obrigatório';
-    } else if (!validarCodigoBarras(formProduto.codigoBarras)) {
-      errors.codigoBarras = 'Código de barras inválido';
+    if (!formData.categoria) {
+      novosErros.categoria = 'Categoria é obrigatória';
     }
 
-    if (!validarObrigatorio(formProduto.categoria)) {
-      errors.categoria = 'Categoria é obrigatória';
+    if (!formData.valorVenda || parseFloat(formData.valorVenda) <= 0) {
+      novosErros.valorVenda = 'Valor de venda deve ser maior que zero';
     }
 
-    if (!validarObrigatorio(formProduto.valorCusto)) {
-      errors.valorCusto = 'Valor de custo é obrigatório';
-    } else if (!validarNumeroPositivo(formProduto.valorCusto)) {
-      errors.valorCusto = 'Valor de custo deve ser positivo';
+    if (!formData.estoque || parseInt(formData.estoque) < 0) {
+      novosErros.estoque = 'Estoque deve ser um número válido';
     }
 
-    if (!validarObrigatorio(formProduto.valorVenda)) {
-      errors.valorVenda = 'Valor de venda é obrigatório';
-    } else if (!validarNumeroPositivo(formProduto.valorVenda)) {
-      errors.valorVenda = 'Valor de venda deve ser positivo';
+    if (!formData.estoqueMinimo || parseInt(formData.estoqueMinimo) < 0) {
+      novosErros.estoqueMinimo = 'Estoque mínimo deve ser um número válido';
     }
 
-    if (controleEstoqueHabilitado) {
-      if (!validarObrigatorio(formProduto.estoque)) {
-        errors.estoque = 'Estoque é obrigatório';
-      }
+    setErros(novosErros);
+    return Object.keys(novosErros).length === 0;
+  };
 
-      if (!validarObrigatorio(formProduto.estoqueMinimo)) {
-        errors.estoqueMinimo = 'Estoque mínimo é obrigatório';
-      }
-    }
+  // Abrir modal para novo produto
+  const abrirModalNovo = () => {
+    setFormData({
+      nome: '',
+      descricao: '',
+      codigoBarras: '',
+      categoria: '',
+      valorCusto: '',
+      valorVenda: '',
+      estoque: '',
+      estoqueMinimo: ''
+    });
+    setProdutoEditando(null);
+    setErros({});
+    setModalAberto(true);
+  };
 
-    // Verificar código de barras duplicado
-    if (!produtoEditando || formProduto.codigoBarras !== produtoEditando.codigo_barras) {
-      const codigoExiste = produtos.some(p => 
-        p.codigo_barras === formProduto.codigoBarras && p.id !== produtoEditando?.id
-      );
-      if (codigoExiste) {
-        errors.codigoBarras = 'Este código de barras já está em uso';
-      }
-    }
+  // Abrir modal para editar produto
+  const abrirModalEdicao = (produto: any) => {
+    setFormData({
+      nome: produto.nome || '',
+      descricao: produto.descricao || '',
+      codigoBarras: produto.codigo_barras || produto.codigoBarras || '',
+      categoria: produto.categoria || '',
+      valorCusto: (produto.valor_custo || produto.valorCusto || 0).toString(),
+      valorVenda: (produto.valor_venda || produto.valorVenda || 0).toString(),
+      estoque: (produto.estoque || 0).toString(),
+      estoqueMinimo: (produto.estoque_minimo || produto.estoqueMinimo || 0).toString()
+    });
+    setProdutoEditando(produto);
+    setErros({});
+    setModalAberto(true);
+  };
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formProduto, produtoEditando, produtos, controleEstoqueHabilitado, validarObrigatorio, validarNumeroPositivo, validarCodigoBarras]);
+  // Fechar modal
+  const fecharModal = () => {
+    setModalAberto(false);
+    setProdutoEditando(null);
+    setFormData({
+      nome: '',
+      descricao: '',
+      codigoBarras: '',
+      categoria: '',
+      valorCusto: '',
+      valorVenda: '',
+      estoque: '',
+      estoqueMinimo: ''
+    });
+    setErros({});
+  };
 
   // Salvar produto
-  const salvarProduto = useCallback(async () => {
+  const salvarProduto = async () => {
     if (!validarFormulario()) return;
 
-    setSalvando(true);
-    
+    setCarregando(true);
     try {
       const dadosProduto = {
-        nome: formProduto.nome,
-        descricao: formProduto.descricao,
-        codigo_barras: formProduto.codigoBarras,
-        categoria: formProduto.categoria,
-        valor_custo: parseFloat(formProduto.valorCusto),
-        valor_venda: parseFloat(formProduto.valorVenda),
-        estoque: controleEstoqueHabilitado ? parseInt(formProduto.estoque) : 0,
-        estoque_minimo: controleEstoqueHabilitado ? parseInt(formProduto.estoqueMinimo) : 0,
-        ativo: formProduto.ativo
+        nome: formData.nome.trim(),
+        descricao: formData.descricao.trim(),
+        codigo_barras: formData.codigoBarras.trim(),
+        categoria: formData.categoria,
+        valor_custo: parseFloat(formData.valorCusto) || 0,
+        valor_venda: parseFloat(formData.valorVenda),
+        estoque: parseInt(formData.estoque),
+        estoque_minimo: parseInt(formData.estoqueMinimo),
+        ativo: true,
+        data_cadastro: new Date().toISOString()
       };
 
+      let resultado;
       if (produtoEditando) {
-        // Atualizar produto existente
-        const resultado = await atualizarProduto(produtoEditando.id, dadosProduto);
-        if (resultado.success) {
-          mostrarMensagem('success', 'Produto atualizado com sucesso!');
-          fecharModal();
-        } else {
-          mostrarMensagem('error', resultado.error || 'Erro ao atualizar produto');
-        }
+        resultado = await atualizarProduto(produtoEditando.id, dadosProduto);
       } else {
-        // Criar novo produto
-        const resultado = await adicionarProduto(dadosProduto);
-        if (resultado.success) {
-          mostrarMensagem('success', 'Produto criado com sucesso!');
-          fecharModal();
-        } else {
-          mostrarMensagem('error', resultado.error || 'Erro ao criar produto');
-        }
+        resultado = await adicionarProduto(dadosProduto);
+      }
+
+      if (resultado.success) {
+        mostrarMensagem('success', 
+          produtoEditando ? 'Produto atualizado com sucesso!' : 'Produto criado com sucesso!'
+        );
+        fecharModal();
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao salvar produto');
       }
     } catch (error) {
-      mostrarMensagem('error', 'Erro ao salvar produto');
+      mostrarMensagem('error', 'Erro inesperado ao salvar produto');
     } finally {
-      setSalvando(false);
+      setCarregando(false);
     }
-  }, [formProduto, produtoEditando, controleEstoqueHabilitado, validarFormulario, adicionarProduto, atualizarProduto, mostrarMensagem, fecharModal]);
+  };
 
-  // Confirmar exclusão
-  const confirmarExclusao = useCallback(async () => {
-    if (!produtoParaExcluir) return;
+  // Excluir produto
+  const handleExcluir = async (produto: any) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o produto "${produto.nome}"?`)) {
+      return;
+    }
 
-    setSalvando(true);
-    
     try {
-      const resultado = await excluirProduto(produtoParaExcluir.id);
+      const resultado = await excluirProduto(produto.id);
       if (resultado.success) {
-        mostrarMensagem('success', `Produto "${produtoParaExcluir.nome}" excluído com sucesso!`);
-        fecharModalExclusao();
+        mostrarMensagem('success', 'Produto excluído com sucesso!');
       } else {
         mostrarMensagem('error', resultado.error || 'Erro ao excluir produto');
       }
     } catch (error) {
-      mostrarMensagem('error', 'Erro ao excluir produto');
-    } finally {
-      setSalvando(false);
+      mostrarMensagem('error', 'Erro inesperado ao excluir produto');
     }
-  }, [produtoParaExcluir, excluirProduto, mostrarMensagem, fecharModalExclusao]);
+  };
 
-  // Verificar permissões
-  const podeGerenciar = tipoUsuario === 'admin';
+  // Alternar status ativo/inativo
+  const alternarStatus = async (produto: any) => {
+    try {
+      const resultado = await atualizarProduto(produto.id, { ativo: !produto.ativo });
+      if (resultado.success) {
+        mostrarMensagem('success', 
+          `Produto ${produto.ativo ? 'desativado' : 'ativado'} com sucesso!`
+        );
+      } else {
+        mostrarMensagem('error', resultado.error || 'Erro ao alterar status');
+      }
+    } catch (error) {
+      mostrarMensagem('error', 'Erro inesperado ao alterar status');
+    }
+  };
 
-  if (!podeGerenciar) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <AlertTriangle className={`h-12 w-12 ${tema.textoSecundario} mx-auto mb-4`} />
-          <p className={`${tema.texto} font-medium`}>Acesso Negado</p>
-          <p className={`${tema.textoSecundario} text-sm`}>
-            Apenas administradores podem gerenciar produtos
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const verificarBaixoEstoque = (produto: any) => {
+    const estoque = produto.estoque || 0;
+    const estoqueMinimo = produto.estoque_minimo || produto.estoqueMinimo || 0;
+    return estoque <= estoqueMinimo;
+  };
 
   return (
-    <div className={`min-h-screen ${tema.fundo} transition-colors duration-200`}>
-      <div className="container mx-auto px-4 py-6">
+    <div className={`min-h-screen ${tema.background} p-6`}>
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
-            <h1 className={`text-2xl font-bold ${tema.texto} flex items-center`}>
-              <Package className="mr-3 h-6 w-6" />
+            <h1 className={`text-3xl font-bold ${tema.text} mb-2`}>
               Produtos
             </h1>
-            <p className={`text-sm ${tema.textoSecundario}`}>
+            <p className={tema.textSecondary}>
               Gerencie o catálogo de produtos
             </p>
           </div>
           
           <button
-            onClick={() => abrirModal()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+            onClick={abrirModalNovo}
+            className={`
+              ${tema.primary} text-white px-6 py-3 rounded-lg 
+              hover:opacity-90 transition-opacity
+              flex items-center space-x-2 mt-4 md:mt-0
+            `}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Produto
+            <Plus size={20} />
+            <span>Novo Produto</span>
           </button>
         </div>
 
-        {/* Estatísticas */}
-        <EstatisticasProdutos />
-
         {/* Filtros */}
-        <div className={`${tema.papel} p-4 rounded-lg border ${tema.borda} mb-6`}>
+        <div className={`${tema.surface} rounded-lg shadow-sm p-6 mb-6`}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                Buscar
-              </label>
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textoSecundario} h-4 w-4`} />
-                <input
-                  type="text"
-                  value={buscaTexto}
-                  onChange={(e) => setBuscaTexto(e.target.value)}
-                  placeholder="Nome, descrição ou código..."
-                  className={`w-full pl-10 pr-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
-                />
-              </div>
+            {/* Busca */}
+            <div className="relative">
+              <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${tema.textSecondary}`} size={20} />
+              <input
+                type="text"
+                placeholder="Buscar produtos..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className={`
+                  w-full pl-10 pr-4 py-2 border ${tema.border} rounded-lg
+                  focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                  ${tema.text}
+                `}
+              />
             </div>
-            
-            <div>
-              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                Categoria
-              </label>
-              <select
-                value={filtroCategoria}
-                onChange={(e) => setFiltroCategoria(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
-              >
-                <option value="todas">Todas as categorias</option>
-                {categorias.filter(c => c.ativa).map(categoria => (
-                  <option key={categoria.id} value={categoria.nome}>
-                    {categoria.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className={`block text-sm font-medium ${tema.texto} mb-1`}>
-                Status
-              </label>
-              <select
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md ${tema.input} ${tema.borda}`}
-              >
-                <option value="todos">Todos</option>
-                <option value="ativo">Apenas Ativos</option>
-                <option value="inativo">Apenas Inativos</option>
-              </select>
-            </div>
-            
-            <div className="flex items-end">
-              <div className={`text-sm ${tema.textoSecundario}`}>
-                {produtosFiltrados.length} de {produtos.length} produtos
-              </div>
-            </div>
+
+            {/* Filtro Categoria */}
+            <select
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              className={`
+                px-4 py-2 border ${tema.border} rounded-lg
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                ${tema.text}
+              `}
+            >
+              <option value="todas">Todas as Categorias</option>
+              {categorias.map((categoria: any) => (
+                <option key={categoria.id} value={categoria.nome}>
+                  {categoria.nome}
+                </option>
+              ))}
+            </select>
+
+            {/* Filtro Status */}
+            <select
+              value={filtroStatus}
+              onChange={(e) => setFiltroStatus(e.target.value)}
+              className={`
+                px-4 py-2 border ${tema.border} rounded-lg
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                ${tema.text}
+              `}
+            >
+              <option value="todos">Todos os Status</option>
+              <option value="ativo">Ativos</option>
+              <option value="inativo">Inativos</option>
+              <option value="baixoEstoque">Baixo Estoque</option>
+            </select>
+
+            {/* Ordenação */}
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as 'nome' | 'categoria' | 'estoque' | 'valor')}
+              className={`
+                px-4 py-2 border ${tema.border} rounded-lg
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                ${tema.text}
+              `}
+            >
+              <option value="nome">Ordenar por Nome</option>
+              <option value="categoria">Ordenar por Categoria</option>
+              <option value="estoque">Ordenar por Estoque</option>
+              <option value="valor">Ordenar por Valor</option>
+            </select>
           </div>
         </div>
 
-        {/* Lista de Produtos */}
-        <div className={`${tema.papel} rounded-lg border ${tema.borda} overflow-hidden table-responsive`}>
-          <div className="custom-scrollbar overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
-              <thead className={tema.fundo === 'bg-gray-900' ? 'bg-gray-800' : 'bg-gray-50'}>
-                <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Produto
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Categoria
-                  </th>
-                  {controleEstoqueHabilitado && (
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                      Estoque
-                    </th>
-                  )}
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Valores
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Margem
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Status
-                  </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${tema.textoSecundario} uppercase tracking-wider`}>
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className={`${tema.papel} divide-y ${tema.borda}`}>
-                {produtosFiltrados.map((produto) => {
-                  const margem = calcularMargem(produto.valor_custo, produto.valor_venda);
-                  const estoqueStatus = controleEstoqueHabilitado ? 
-                    (produto.estoque <= produto.estoque_minimo ? 'baixo' : 'normal') : 'disabled';
-                  
-                  return (
-                    <tr key={produto.id} className={`${tema.hover} table-hover-row`}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className={`text-sm font-medium ${tema.texto}`}>
-                            {produto.nome}
-                          </div>
-                          <div className={`text-sm ${tema.textoSecundario}`}>
-                            {produto.codigo_barras}
-                          </div>
-                          {produto.descricao && (
-                            <div className={`text-xs ${tema.textoSecundario} mt-1`}>
-                              {produto.descricao.substring(0, 50)}
-                              {produto.descricao.length > 50 && '...'}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800`}>
-                          {produto.categoria}
-                        </span>
-                      </td>
-                      {controleEstoqueHabilitado && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={`text-sm ${estoqueStatus === 'baixo' ? 'text-red-600 font-medium' : tema.texto}`}>
-                            {produto.estoque}
-                            {estoqueStatus === 'baixo' && (
-                              <AlertTriangle className="inline h-4 w-4 ml-1" />
-                            )}
-                          </div>
-                          <div className={`text-xs ${tema.textoSecundario}`}>
-                            Mín: {produto.estoque_minimo}
-                          </div>
-                        </td>
-                      )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${tema.texto}`}>
-                          <div>Custo: {formatarMoedaBR(produto.valor_custo)}</div>
-                          <div className="font-medium">Venda: {formatarMoedaBR(produto.valor_venda)}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-sm font-medium ${
-                          margem > 30 ? 'text-green-600' : 
-                          margem > 10 ? 'text-yellow-600' : 
-                          'text-red-600'
-                        }`}>
-                          {margem.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          produto.ativo 
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {produto.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => abrirModal(produto)}
-                            className="text-blue-600 hover:text-blue-700"
-                            title="Editar produto"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => abrirModalExclusao(produto)}
-                            className="text-red-600 hover:text-red-700"
-                            title="Excluir produto"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {produtosFiltrados.length === 0 && (
-            <div className="text-center py-12">
-              <Package className={`mx-auto h-12 w-12 ${tema.textoSecundario}`} />
-              <h3 className={`mt-2 text-sm font-medium ${tema.texto}`}>
-                Nenhum produto encontrado
-              </h3>
-              <p className={`mt-1 text-sm ${tema.textoSecundario}`}>
-                {produtos.length === 0 
-                  ? 'Comece criando seu primeiro produto.'
-                  : 'Tente ajustar os filtros de busca.'
-                }
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Modal Produto */}
-        {modalAberto && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModal()}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className={`text-lg font-medium ${tema.texto} mb-4`}>
-                    {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
+        {/* Lista de produtos */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {produtosOrdenados.map((produto: any) => (
+            <div key={produto.id} className={`${tema.surface} rounded-lg shadow-sm p-6`}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className={`font-semibold ${tema.text} mb-1`}>
+                    {produto.nome}
                   </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Nome */}
-                    <div className="md:col-span-2">
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Nome *
-                      </label>
-                      <input
-                        type="text"
-                        value={formProduto.nome}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, nome: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.nome ? 'border-red-500' : tema.borda}`}
-                        placeholder="Nome do produto"
-                        disabled={salvando}
-                      />
-                      {formErrors.nome && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.nome}</p>
-                      )}
-                    </div>
-
-                    {/* Código de Barras */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Código de Barras *
-                      </label>
-                      <input
-                        type="text"
-                        value={formProduto.codigoBarras}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, codigoBarras: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.codigoBarras ? 'border-red-500' : tema.borda}`}
-                        placeholder="000000000000"
-                        disabled={salvando}
-                      />
-                      {formErrors.codigoBarras && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.codigoBarras}</p>
-                      )}
-                    </div>
-
-                    {/* Categoria */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Categoria *
-                      </label>
-                      <select
-                        value={formProduto.categoria}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, categoria: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.categoria ? 'border-red-500' : tema.borda}`}
-                        disabled={salvando}
-                      >
-                        <option value="">Selecione uma categoria</option>
-                        {categorias.filter(c => c.ativa).map(categoria => (
-                          <option key={categoria.id} value={categoria.nome}>
-                            {categoria.nome}
-                          </option>
-                        ))}
-                      </select>
-                      {formErrors.categoria && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.categoria}</p>
-                      )}
-                    </div>
-
-                    {/* Valor de Custo */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Valor de Custo *
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formProduto.valorCusto}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, valorCusto: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.valorCusto ? 'border-red-500' : tema.borda}`}
-                        placeholder="0,00"
-                        disabled={salvando}
-                      />
-                      {formErrors.valorCusto && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.valorCusto}</p>
-                      )}
-                    </div>
-
-                    {/* Valor de Venda */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Valor de Venda *
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formProduto.valorVenda}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, valorVenda: e.target.value }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.valorVenda ? 'border-red-500' : tema.borda}`}
-                        placeholder="0,00"
-                        disabled={salvando}
-                      />
-                      {formErrors.valorVenda && (
-                        <p className="mt-1 text-sm text-red-600">{formErrors.valorVenda}</p>
-                      )}
-                    </div>
-
-                    {/* Campos de Estoque (apenas se habilitado) */}
-                    {controleEstoqueHabilitado && (
-                      <>
-                        <div>
-                          <label className={`block text-sm font-medium ${tema.texto}`}>
-                            Estoque Atual *
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formProduto.estoque}
-                            onChange={(e) => setFormProduto(prev => ({ ...prev, estoque: e.target.value }))}
-                            className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.estoque ? 'border-red-500' : tema.borda}`}
-                            placeholder="0"
-                            disabled={salvando}
-                          />
-                          {formErrors.estoque && (
-                            <p className="mt-1 text-sm text-red-600">{formErrors.estoque}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className={`block text-sm font-medium ${tema.texto}`}>
-                            Estoque Mínimo *
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formProduto.estoqueMinimo}
-                            onChange={(e) => setFormProduto(prev => ({ ...prev, estoqueMinimo: e.target.value }))}
-                            className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${formErrors.estoqueMinimo ? 'border-red-500' : tema.borda}`}
-                            placeholder="0"
-                            disabled={salvando}
-                          />
-                          {formErrors.estoqueMinimo && (
-                            <p className="mt-1 text-sm text-red-600">{formErrors.estoqueMinimo}</p>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Descrição */}
-                    <div className="md:col-span-2">
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Descrição
-                      </label>
-                      <textarea
-                        value={formProduto.descricao}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, descricao: e.target.value }))}
-                        rows={3}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
-                        placeholder="Descrição detalhada do produto..."
-                        disabled={salvando}
-                      />
-                    </div>
-
-                    {/* Status */}
-                    <div>
-                      <label className={`block text-sm font-medium ${tema.texto}`}>
-                        Status
-                      </label>
-                      <select
-                        value={formProduto.ativo ? 'ativo' : 'inativo'}
-                        onChange={(e) => setFormProduto(prev => ({ ...prev, ativo: e.target.value === 'ativo' }))}
-                        className={`mt-1 block w-full border rounded-md px-3 py-2 ${tema.input} ${tema.borda}`}
-                        disabled={salvando}
-                      >
-                        <option value="ativo">Ativo</option>
-                        <option value="inativo">Inativo</option>
-                      </select>
-                    </div>
-
-                    {/* Margem (apenas visualização) */}
-                    {formProduto.valorCusto && formProduto.valorVenda && (
-                      <div>
-                        <label className={`block text-sm font-medium ${tema.texto}`}>
-                          Margem de Lucro
-                        </label>
-                        <div className={`mt-1 px-3 py-2 border rounded-md ${tema.input} ${tema.borda} bg-gray-50`}>
-                          <span className={`text-sm font-medium ${
-                            calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)) > 30 
-                              ? 'text-green-600' 
-                              : calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)) > 10
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                          }`}>
-                            {calcularMargem(parseFloat(formProduto.valorCusto), parseFloat(formProduto.valorVenda)).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-end space-x-3 pt-6">
-                    <button
-                      onClick={fecharModal}
-                      disabled={salvando}
-                      className={`px-4 py-2 ${tema.texto} border ${tema.borda} rounded-md ${tema.hover} disabled:opacity-50`}
-                    >
-                      <X className="mr-2 h-4 w-4 inline" />
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={salvarProduto}
-                      disabled={salvando}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
-                    >
-                      {salvando ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Salvando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          {produtoEditando ? 'Atualizar' : 'Criar'}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  <p className={`text-sm ${tema.textSecondary} mb-2`}>
+                    {produto.categoria}
+                  </p>
+                  {produto.descricao && (
+                    <p className={`text-sm ${tema.textSecondary} mb-2`}>
+                      {produto.descricao}
+                    </p>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de Confirmação de Exclusão */}
-        {modalExclusaoAberto && produtoParaExcluir && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !salvando && fecharModalExclusao()}></div>
-              
-              <div className={`inline-block align-bottom ${tema.papel} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
-                <div className="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="sm:flex sm:items-start">
-                    <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                      <AlertTriangle className="h-6 w-6 text-red-600" />
-                    </div>
-                    <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                      <h3 className={`text-lg leading-6 font-medium ${tema.texto}`}>
-                        Confirmar Exclusão
-                      </h3>
-                      <div className="mt-2">
-                        <p className={`text-sm ${tema.textoSecundario}`}>
-                          Tem certeza que deseja excluir o produto <strong>{produtoParaExcluir.nome}</strong>? 
-                          Esta ação não pode ser desfeita.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                
+                <div className="flex items-center space-x-2">
                   <button
-                    onClick={confirmarExclusao}
-                    disabled={salvando}
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                    onClick={() => abrirModalEdicao(produto)}
+                    className={`p-2 ${tema.textSecondary} hover:${tema.text} transition-colors`}
                   >
-                    {salvando ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Excluindo...
-                      </>
-                    ) : (
-                      'Excluir'
-                    )}
+                    <Edit size={16} />
                   </button>
                   <button
-                    onClick={fecharModalExclusao}
-                    disabled={salvando}
-                    className={`mt-3 w-full inline-flex justify-center rounded-md border ${tema.borda} shadow-sm px-4 py-2 ${tema.papel} text-base font-medium ${tema.texto} ${tema.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50`}
+                    onClick={() => handleExcluir(produto)}
+                    className="p-2 text-red-500 hover:text-red-700 transition-colors"
                   >
-                    Cancelar
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
+
+              {/* Informações do produto */}
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className={tema.textSecondary}>Valor de Venda:</span>
+                  <span className={`font-medium ${tema.text}`}>
+                    {formatarMoeda(produto.valor_venda || produto.valorVenda || 0)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className={tema.textSecondary}>Estoque:</span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`font-medium ${tema.text}`}>
+                      {produto.estoque || 0}
+                    </span>
+                    {verificarBaixoEstoque(produto) && (
+                      <AlertTriangle size={16} className="text-red-500" />
+                    )}
+                  </div>
+                </div>
+
+                {produto.codigo_barras && (
+                  <div className="flex justify-between">
+                    <span className={tema.textSecondary}>Código:</span>
+                    <span className={`font-medium ${tema.text} text-sm`}>
+                      {produto.codigo_barras || produto.codigoBarras}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Status e ações */}
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => alternarStatus(produto)}
+                  className={`
+                    px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-1
+                    ${produto.ativo 
+                      ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                      : 'bg-red-100 text-red-800 hover:bg-red-200'
+                    } transition-colors
+                  `}
+                >
+                  {produto.ativo ? <CheckCircle size={14} /> : <Package size={14} />}
+                  <span>{produto.ativo ? 'Ativo' : 'Inativo'}</span>
+                </button>
+
+                {verificarBaixoEstoque(produto) && (
+                  <span className="text-xs text-red-600 font-medium">
+                    Estoque Baixo
+                  </span>
+                )}
+              </div>
             </div>
+          ))}
+        </div>
+
+        {produtosOrdenados.length === 0 && (
+          <div className={`${tema.surface} rounded-lg shadow-sm p-12 text-center`}>
+            <Package size={48} className={`${tema.textSecondary} mx-auto mb-4`} />
+            <h3 className={`text-lg font-medium ${tema.text} mb-2`}>
+              Nenhum produto encontrado
+            </h3>
+            <p className={tema.textSecondary}>
+              {busca || filtroCategoria !== 'todas' || filtroStatus !== 'todos' 
+                ? 'Tente ajustar os filtros de busca' 
+                : 'Crie seu primeiro produto para começar'}
+            </p>
           </div>
         )}
       </div>
+
+      {/* Modal */}
+      {modalAberto && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
+            <div className="p-6">
+              <h2 className={`text-xl font-bold ${tema.text} mb-6`}>
+                {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
+              </h2>
+
+              <div className="space-y-4">
+                {/* Nome */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Nome *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${erros.nome ? 'border-red-500' : tema.border}
+                    `}
+                    placeholder="Digite o nome do produto"
+                  />
+                  {erros.nome && (
+                    <p className="text-red-500 text-sm mt-1">{erros.nome}</p>
+                  )}
+                </div>
+
+                {/* Descrição */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Descrição
+                  </label>
+                  <textarea
+                    value={formData.descricao}
+                    onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                    rows={3}
+                    className={`w-full px-3 py-2 border ${tema.border} rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                    placeholder="Digite a descrição do produto"
+                  />
+                </div>
+
+                {/* Código de Barras e Categoria */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Código de Barras
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.codigoBarras}
+                      onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
+                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      placeholder="Código de barras"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Categoria *
+                    </label>
+                    <select
+                      value={formData.categoria}
+                      onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.categoria ? 'border-red-500' : tema.border}
+                      `}
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {categorias.map((categoria: any) => (
+                        <option key={categoria.id} value={categoria.nome}>
+                          {categoria.nome}
+                        </option>
+                      ))}
+                    </select>
+                    {erros.categoria && (
+                      <p className="text-red-500 text-sm mt-1">{erros.categoria}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Valores */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Valor de Custo
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.valorCusto}
+                      onChange={(e) => setFormData({ ...formData, valorCusto: e.target.value })}
+                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      placeholder="0,00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Valor de Venda *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.valorVenda}
+                      onChange={(e) => setFormData({ ...formData, valorVenda: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.valorVenda ? 'border-red-500' : tema.border}
+                      `}
+                      placeholder="0,00"
+                    />
+                    {erros.valorVenda && (
+                      <p className="text-red-500 text-sm mt-1">{erros.valorVenda}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Estoque */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Estoque Atual *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.estoque}
+                      onChange={(e) => setFormData({ ...formData, estoque: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.estoque ? 'border-red-500' : tema.border}
+                      `}
+                      placeholder="0"
+                    />
+                    {erros.estoque && (
+                      <p className="text-red-500 text-sm mt-1">{erros.estoque}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Estoque Mínimo *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.estoqueMinimo}
+                      onChange={(e) => setFormData({ ...formData, estoqueMinimo: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.estoqueMinimo ? 'border-red-500' : tema.border}
+                      `}
+                      placeholder="0"
+                    />
+                    {erros.estoqueMinimo && (
+                      <p className="text-red-500 text-sm mt-1">{erros.estoqueMinimo}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8">
+                <button
+                  onClick={fecharModal}
+                  disabled={carregando}
+                  className={`
+                    px-4 py-2 border ${tema.border} rounded-lg
+                    ${tema.text} hover:${tema.hover} transition-colors
+                    disabled:opacity-50
+                  `}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarProduto}
+                  disabled={carregando}
+                  className={`
+                    ${tema.primary} text-white px-4 py-2 rounded-lg
+                    hover:opacity-90 transition-opacity
+                    disabled:opacity-50
+                  `}
+                >
+                  {carregando ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

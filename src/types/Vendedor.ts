@@ -1,14 +1,18 @@
 // src/types/Vendedor.ts
+import { StatusVendedor } from './Common';
 
 export interface Vendedor {
   id: number;
   nome: string;
   email: string;
   telefone: string;
-  status: string; // Mudando de Status para string para compatibilidade
+  status: StatusVendedor | string; // Permitir string para compatibilidade
   login: string;
   senha: string;
-  dataCadastro: string;
+  data_cadastro?: string; // snake_case para Supabase
+  dataCadastro?: string; // camelCase para compatibilidade
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface VendedorForm {
