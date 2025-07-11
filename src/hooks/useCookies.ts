@@ -20,11 +20,9 @@ export const useCookies = (): CookieManager => {
     document.cookie = `${name}=${value}${expires}; path=/`;
   }, []);
 
-  // ADICIONAR ESTA FUNÇÃO:
-  const deleteCookie = useCallback((name: string): void => {
+  const removeCookie = useCallback((name: string): void => {
     document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   }, []);
 
-  // ATUALIZAR O RETURN:
-  return { getCookie, setCookie, deleteCookie };
+  return { getCookie, setCookie, removeCookie };
 };

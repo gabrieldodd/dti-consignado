@@ -3,14 +3,14 @@ import { CorCategoria } from '../types/Common';
 
 // Cores disponíveis para categorias
 export const CORES_DISPONIVEIS: CorCategoria[] = [
-  { valor: 'blue', nome: 'Azul', classe: 'bg-blue-100 text-blue-800' },
-  { valor: 'green', nome: 'Verde', classe: 'bg-green-100 text-green-800' },
-  { valor: 'yellow', nome: 'Amarelo', classe: 'bg-yellow-100 text-yellow-800' },
-  { valor: 'purple', nome: 'Roxo', classe: 'bg-purple-100 text-purple-800' },
-  { valor: 'red', nome: 'Vermelho', classe: 'bg-red-100 text-red-800' },
-  { valor: 'pink', nome: 'Rosa', classe: 'bg-pink-100 text-pink-800' },
-  { valor: 'indigo', nome: 'Índigo', classe: 'bg-indigo-100 text-indigo-800' },
-  { valor: 'gray', nome: 'Cinza', classe: 'bg-gray-100 text-gray-800' }
+  { valor: 'blue', nome: 'Azul', classe: 'bg-blue-100 text-blue-800', hex: '#3b82f6' },
+  { valor: 'green', nome: 'Verde', classe: 'bg-green-100 text-green-800', hex: '#10b981' },
+  { valor: 'yellow', nome: 'Amarelo', classe: 'bg-yellow-100 text-yellow-800', hex: '#f59e0b' },
+  { valor: 'purple', nome: 'Roxo', classe: 'bg-purple-100 text-purple-800', hex: '#8b5cf6' },
+  { valor: 'red', nome: 'Vermelho', classe: 'bg-red-100 text-red-800', hex: '#ef4444' },
+  { valor: 'pink', nome: 'Rosa', classe: 'bg-pink-100 text-pink-800', hex: '#ec4899' },
+  { valor: 'indigo', nome: 'Índigo', classe: 'bg-indigo-100 text-indigo-800', hex: '#6366f1' },
+  { valor: 'gray', nome: 'Cinza', classe: 'bg-gray-100 text-gray-800', hex: '#6b7280' }
 ];
 
 // Configurações de cookies

@@ -26,7 +26,7 @@ html, body {
   width: 100%;
   min-height: 100vh;
 }
-```css
+
 /* Customizações do Sistema */
 .custom-scrollbar {
   scrollbar-width: none;
@@ -61,4 +61,3 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
-```

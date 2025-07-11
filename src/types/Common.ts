@@ -21,9 +21,10 @@ export interface Tema {
   info: string;
   menuAtivo: string;
   // Compatibilidade com nomes antigos
+  fundo?: string;
+  papel?: string;
   texto?: string;
   textoSecundario?: string;
-  papel?: string;
   borda?: string;
   input?: string;
 }
@@ -47,6 +48,7 @@ export interface TemaConfig {
 }
 
 export interface CorCategoria {
+  valor: string;
   nome: string;
   hex: string;
   classe: string;
