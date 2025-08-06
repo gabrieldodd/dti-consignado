@@ -1,11 +1,6 @@
 // src/hooks/useSupabase.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Vendedor } from '../types/Vendedor';
-import { Produto } from '../types/Produto';
-import { Categoria } from '../types/Categoria';
-import { Consignacao } from '../types/Consignacao';
-import { StatusConsignacao } from '../types/Common';
 
 export const useSupabase = () => {
   const [vendedores, setVendedores] = useState<any[]>([]);
@@ -15,18 +10,57 @@ export const useSupabase = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Função de login
+  const fazerLogin = async (login: string, senha: string) => {
+    try {
+      setLoading(true);
+      
+      // Buscar vendedor pelo login
+      const { data, error: err } = await supabase
+        .from('vendedores')
+        .select('*')
+        .eq('login', login)
+        .eq('senha', senha)
+        .single();
+
+      if (err || !data) {
+        console.error('Erro no login:', err);
+        return null;
+      }
+
+      console.log('Login bem-sucedido:', data);
+      return data;
+    } catch (error) {
+      console.error('Erro ao fazer login:', error);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch inicial de dados
+  useEffect(() => {
+    fetchVendedores();
+    fetchProdutos();
+    fetchCategorias();
+    fetchConsignacoes();
+  }, []);
+
   // Fetch vendedores
   const fetchVendedores = async () => {
     try {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('vendedores')
-        .select('*');
+        .select('*')
+        .order('nome');
       
       if (err) throw err;
       setVendedores(data || []);
+      console.log('Vendedores carregados:', data?.length);
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
+      console.error('Erro ao buscar vendedores:', err);
     } finally {
       setLoading(false);
     }
@@ -35,13 +69,25 @@ export const useSupabase = () => {
   // Adicionar vendedor
   const adicionarVendedor = async (vendedor: any) => {
     try {
+      // Formatar dados para o Supabase
+      const vendedorFormatado = {
+        nome: vendedor.nome,
+        email: vendedor.email,
+        telefone: vendedor.telefone,
+        status: vendedor.status || 'Ativo',
+        login: vendedor.login,
+        senha: vendedor.senha,
+        data_cadastro: new Date().toISOString().split('T')[0]
+      };
+
       const { data, error: err } = await supabase
         .from('vendedores')
-        .insert([vendedor])
+        .insert([vendedorFormatado])
         .select();
 
       if (err) throw err;
-      setVendedores(prev => [...prev, ...(data || [])]);
+      
+      await fetchVendedores(); // Recarregar lista
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -59,7 +105,8 @@ export const useSupabase = () => {
         .select();
 
       if (err) throw err;
-      setVendedores(prev => prev.map((v: any) => v.id === id ? { ...v, ...updates } : v));
+      
+      await fetchVendedores();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -76,7 +123,8 @@ export const useSupabase = () => {
         .eq('id', id);
 
       if (err) throw err;
-      setVendedores(prev => prev.filter((v: any) => v.id !== id));
+      
+      await fetchVendedores();
       return { success: true };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -90,12 +138,15 @@ export const useSupabase = () => {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('produtos')
-        .select('*');
+        .select('*')
+        .order('nome');
       
       if (err) throw err;
       setProdutos(data || []);
+      console.log('Produtos carregados:', data?.length);
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
+      console.error('Erro ao buscar produtos:', err);
     } finally {
       setLoading(false);
     }
@@ -104,13 +155,27 @@ export const useSupabase = () => {
   // Adicionar produto
   const adicionarProduto = async (produto: any) => {
     try {
+      const produtoFormatado = {
+        nome: produto.nome,
+        descricao: produto.descricao,
+        codigo_barras: produto.codigoBarras,
+        categoria: produto.categoria,
+        valor_custo: produto.valorCusto,
+        valor_venda: produto.valorVenda,
+        estoque: produto.estoque,
+        estoque_minimo: produto.estoqueMinimo,
+        ativo: produto.ativo !== false,
+        data_cadastro: new Date().toISOString().split('T')[0]
+      };
+
       const { data, error: err } = await supabase
         .from('produtos')
-        .insert([produto])
+        .insert([produtoFormatado])
         .select();
 
       if (err) throw err;
-      setProdutos(prev => [...prev, ...(data || [])]);
+      
+      await fetchProdutos();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -128,7 +193,8 @@ export const useSupabase = () => {
         .select();
 
       if (err) throw err;
-      setProdutos(prev => prev.map((p: any) => p.id === id ? { ...p, ...updates } : p));
+      
+      await fetchProdutos();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -145,7 +211,8 @@ export const useSupabase = () => {
         .eq('id', id);
 
       if (err) throw err;
-      setProdutos(prev => prev.filter((p: any) => p.id !== id));
+      
+      await fetchProdutos();
       return { success: true };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -159,12 +226,15 @@ export const useSupabase = () => {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('categorias')
-        .select('*');
+        .select('*')
+        .order('nome');
       
       if (err) throw err;
       setCategorias(data || []);
+      console.log('Categorias carregadas:', data?.length);
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
+      console.error('Erro ao buscar categorias:', err);
     } finally {
       setLoading(false);
     }
@@ -173,13 +243,22 @@ export const useSupabase = () => {
   // Adicionar categoria
   const adicionarCategoria = async (categoria: any) => {
     try {
+      const categoriaFormatada = {
+        nome: categoria.nome,
+        descricao: categoria.descricao,
+        cor: categoria.cor,
+        ativa: categoria.ativa !== false,
+        data_cadastro: new Date().toISOString().split('T')[0]
+      };
+
       const { data, error: err } = await supabase
         .from('categorias')
-        .insert([categoria])
+        .insert([categoriaFormatada])
         .select();
 
       if (err) throw err;
-      setCategorias(prev => [...prev, ...(data || [])]);
+      
+      await fetchCategorias();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -197,7 +276,8 @@ export const useSupabase = () => {
         .select();
 
       if (err) throw err;
-      setCategorias(prev => prev.map((c: any) => c.id === id ? { ...c, ...updates } : c));
+      
+      await fetchCategorias();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -214,7 +294,8 @@ export const useSupabase = () => {
         .eq('id', id);
 
       if (err) throw err;
-      setCategorias(prev => prev.filter((c: any) => c.id !== id));
+      
+      await fetchCategorias();
       return { success: true };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -222,34 +303,50 @@ export const useSupabase = () => {
     }
   };
 
-  // Fetch consignações
+  // Fetch consignacoes
   const fetchConsignacoes = async () => {
     try {
       setLoading(true);
       const { data, error: err } = await supabase
         .from('consignacoes')
-        .select('*, vendedor:vendedores(*)')
-        .order('created_at', { ascending: false });
+        .select('*')
+        .order('data_consignacao', { ascending: false });
       
       if (err) throw err;
       setConsignacoes(data || []);
+      console.log('Consignações carregadas:', data?.length);
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
+      console.error('Erro ao buscar consignações:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Adicionar consignação
+  // Adicionar consignacao
   const adicionarConsignacao = async (consignacao: any) => {
     try {
+      const consignacaoFormatada = {
+        cliente_nome: consignacao.clienteNome,
+        cliente_documento: consignacao.clienteDocumento,
+        cliente_telefone: consignacao.clienteTelefone,
+        tipo_documento: consignacao.tipoDocumento,
+        vendedor_id: consignacao.vendedorId,
+        quantidade_total: consignacao.quantidadeTotal,
+        valor_total: consignacao.valorTotal,
+        data_consignacao: new Date().toISOString().split('T')[0],
+        status: 'ativa',
+        observacoes: consignacao.observacoes
+      };
+
       const { data, error: err } = await supabase
         .from('consignacoes')
-        .insert([consignacao])
-        .select('*, vendedor:vendedores(*)');
+        .insert([consignacaoFormatada])
+        .select();
 
       if (err) throw err;
-      setConsignacoes(prev => [...prev, ...(data || [])]);
+      
+      await fetchConsignacoes();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -257,12 +354,12 @@ export const useSupabase = () => {
     }
   };
 
-  // Finalizar consignação
+  // Finalizar consignacao
   const finalizarConsignacao = async (id: any, dadosRetorno: any) => {
     try {
       const updates = {
-        status: 'finalizada' as StatusConsignacao,
-        data_retorno: new Date().toISOString(),
+        status: 'finalizada',
+        data_retorno: new Date().toISOString().split('T')[0],
         retorno: dadosRetorno
       };
 
@@ -270,14 +367,11 @@ export const useSupabase = () => {
         .from('consignacoes')
         .update(updates)
         .eq('id', id)
-        .select('*, vendedor:vendedores(*)');
+        .select();
 
       if (err) throw err;
       
-      setConsignacoes(prev => prev.map((c: any) => 
-        c.id === id ? { ...c, ...updates } : c
-      ));
-      
+      await fetchConsignacoes();
       return { success: true, data: data || [] };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -285,7 +379,7 @@ export const useSupabase = () => {
     }
   };
 
-  // Excluir consignação
+  // Excluir consignacao
   const excluirConsignacao = async (id: any) => {
     try {
       const { error: err } = await supabase
@@ -294,7 +388,8 @@ export const useSupabase = () => {
         .eq('id', id);
 
       if (err) throw err;
-      setConsignacoes(prev => prev.filter((c: any) => c.id !== id));
+      
+      await fetchConsignacoes();
       return { success: true };
     } catch (err: any) {
       setError(err?.message || 'Erro desconhecido');
@@ -302,6 +397,7 @@ export const useSupabase = () => {
     }
   };
 
+  // Refetch all data
   const refetch = async () => {
     await Promise.all([
       fetchVendedores(),
@@ -311,17 +407,17 @@ export const useSupabase = () => {
     ]);
   };
 
-  useEffect(() => {
-    refetch();
-  }, []);
-
   return {
+    // Dados
     vendedores,
     produtos,
     categorias,
     consignacoes,
     loading,
     error,
+    
+    // Funções
+    fazerLogin,
     adicionarVendedor,
     atualizarVendedor,
     excluirVendedor,

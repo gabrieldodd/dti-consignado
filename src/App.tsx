@@ -9,6 +9,7 @@ import { TelaProdutos } from './components/screens/TelaProdutos';
 import { TelaCategorias } from './components/screens/TelaCategorias';
 import { MenuLateral } from './components/layout/MenuLateral';
 import { Menu, Sun, Moon, User } from 'lucide-react';
+import { verificarSupabaseAoIniciar } from './utils/testSupabase';
 
 const AppContent: React.FC = () => {
   const { 
@@ -28,6 +29,7 @@ const AppContent: React.FC = () => {
 
   // Verificar login salvo ao inicializar
   useEffect(() => {
+	verificarSupabaseAoIniciar();
     const usuarioSalvo = cookies.getCookie('usuarioLogado');
     const tipoSalvo = cookies.getCookie('tipoUsuario');
     

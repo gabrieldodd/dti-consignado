@@ -2,10 +2,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useSupabase } from '../hooks/useSupabase';
 import { Tema, TipoMensagem } from '../types/Common';
-import { Vendedor } from '../types/Vendedor';
-import { Produto } from '../types/Produto';
-import { Categoria } from '../types/Categoria';
-import { Consignacao } from '../types/Consignacao';
 
 interface AppContextType {
   // Tema
@@ -26,6 +22,7 @@ interface AppContextType {
   consignacoes: any[];
   loading: boolean;
   error: string | null;
+  fazerLogin: (login: string, senha: string) => Promise<boolean>;
   
   // Loadings específicos
   loadingVendedores: boolean;
@@ -50,7 +47,6 @@ interface AppContextType {
   
   // Funcionalidades
   mostrarMensagem: (tipo: TipoMensagem, texto: string) => void;
-  fazerLogin: (login: string, senha: string) => boolean;
   fazerLogout: () => void;
   
   // Utils
@@ -126,45 +122,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const mostrarMensagem = useCallback((tipo: TipoMensagem, texto: string) => {
     // Implementação simples - pode ser melhorada com toast/notification
     if (tipo === 'error') {
-      console.error(texto);
-      alert(`Erro: ${texto}`);
+      console.error('❌', texto);
     } else if (tipo === 'success') {
-      console.log(texto);
-      alert(`Sucesso: ${texto}`);
+      console.log('✅', texto);
+    } else if (tipo === 'warning') {
+      console.warn('⚠️', texto);
     } else {
-      console.log(texto);
-      alert(texto);
+      console.log('ℹ️', texto);
     }
   }, []);
 
-  // Login/Logout
-  const fazerLogin = useCallback((login: string, senha: string) => {
-    // Simulação de login simples
-    const usuariosValidos = [
-      { id: 1, nome: 'Administrador', login: 'admin', senha: 'admin', status: 'ativo' },
-      { id: 2, nome: 'Vendedor', login: 'vendedor', senha: '123', status: 'ativo' }
-    ];
-
-    const usuario = usuariosValidos.find((u: any) => u.login === login && u.senha === senha && u.status === 'ativo');
-    
-    if (usuario) {
-      setUsuarioLogado(usuario);
-      setTipoUsuario(usuario.login === 'admin' ? 'admin' : 'vendedor');
-      cookies.setCookie('usuarioLogado', JSON.stringify(usuario), 7);
-      cookies.setCookie('tipoUsuario', usuario.login === 'admin' ? 'admin' : 'vendedor', 7);
-      return true;
-    }
-    return false;
-  }, []);
-
-  const fazerLogout = useCallback(() => {
-    setUsuarioLogado(null);
-    setTipoUsuario(null);
-    cookies.removeCookie('usuarioLogado');
-    cookies.removeCookie('tipoUsuario');
-  }, []);
-
-  // Utilitários
+  // Utilitários de Cookies
   const cookies = {
     getCookie: (name: string): string | null => {
       const value = `; ${document.cookie}`;
@@ -181,6 +149,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Login usando Supabase
+  const fazerLogin = useCallback(async (login: string, senha: string): Promise<boolean> => {
+    try {
+      // Usar a função do Supabase
+      const usuario = await supabaseData.fazerLogin(login, senha);
+      
+      if (usuario) {
+        setUsuarioLogado(usuario);
+        setTipoUsuario(usuario.login === 'admin' ? 'admin' : 'vendedor');
+        cookies.setCookie('usuarioLogado', JSON.stringify(usuario), 7);
+        cookies.setCookie('tipoUsuario', usuario.login === 'admin' ? 'admin' : 'vendedor', 7);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      return false;
+    }
+  }, [supabaseData]); // Fechamento correto da função fazerLogin
+
+  // Logout
+  const fazerLogout = useCallback(() => {
+    setUsuarioLogado(null);
+    setTipoUsuario(null);
+    cookies.removeCookie('usuarioLogado');
+    cookies.removeCookie('tipoUsuario');
+    mostrarMensagem('info', 'Logout realizado com sucesso');
+  }, [mostrarMensagem]);
+
+  // Funções de formatação
   const formatarMoeda = useCallback((valor: number): string => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -189,6 +188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const formatarData = useCallback((data: string): string => {
+    if (!data) return '';
     return new Date(data).toLocaleDateString('pt-BR');
   }, []);
 
@@ -200,10 +200,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return nums.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
   }, []);
 
+  // Validações
   const validarCPF = useCallback((cpf: string): boolean => {
     const nums = cpf.replace(/\D/g, '');
     if (nums.length !== 11) return false;
-    if (nums === '00000000000') return false;
+    if (/^(\d)\1{10}$/.test(nums)) return false;
     
     let sum = 0;
     for (let i = 0; i < 9; i++) {
@@ -227,8 +228,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const validarCNPJ = useCallback((cnpj: string): boolean => {
     const nums = cnpj.replace(/\D/g, '');
     if (nums.length !== 14) return false;
-    if (nums === '00000000000000') return false;
-    return true; // Simplificado
+    if (/^(\d)\1{13}$/.test(nums)) return false;
+    
+    // Implementação simplificada
+    return true;
   }, []);
 
   const validarEmail = useCallback((email: string): boolean => {
@@ -236,6 +239,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return regex.test(email);
   }, []);
 
+  // Valor do contexto
   const value: AppContextType = {
     // Tema
     temaEscuro,
@@ -255,6 +259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     consignacoes: supabaseData.consignacoes,
     loading: supabaseData.loading,
     error: supabaseData.error,
+    fazerLogin,
     
     // Loadings específicos
     loadingVendedores: supabaseData.loading,
@@ -279,7 +284,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     // Funcionalidades
     mostrarMensagem,
-    fazerLogin,
     fazerLogout,
     
     // Utils

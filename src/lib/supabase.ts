@@ -1,11 +1,46 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-// URLs e chaves do Supabase (substitua pelos seus valores reais)
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://your-project-url.supabase.co';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'your-anon-key';
+// Configuração para Vite (usa import.meta.env ao invés de process.env)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Validação das variáveis de ambiente
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('⚠️ Variáveis de ambiente do Supabase não configuradas!');
+  console.error('Crie um arquivo .env com:');
+  console.error('VITE_SUPABASE_URL=sua_url_aqui');
+  console.error('VITE_SUPABASE_ANON_KEY=sua_chave_aqui');
+  
+  throw new Error('Supabase não configurado. Verifique o arquivo .env');
+}
+
+// Criar cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Log de sucesso
+console.log('✅ Supabase configurado com sucesso!');
+console.log('📍 URL:', supabaseUrl);
+
+// Função para testar a conexão
+export const testConnection = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('categorias')
+      .select('count', { count: 'exact', head: true });
+    
+    if (error) {
+      console.error('❌ Erro ao conectar com Supabase:', error.message);
+      return false;
+    }
+    
+    console.log('✅ Conexão com Supabase funcionando!');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro de conexão:', error);
+    return false;
+  }
+};
 
 // Tipos para as tabelas do Supabase
 export interface Database {
