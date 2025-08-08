@@ -619,28 +619,56 @@ export const TelaConsignacoes: React.FC = () => {
                 </div>
               </div>
 
-              {/* Vendedor */}
-              <div>
-                <label className={`block text-sm font-medium ${tema.text} mb-1`}>
-                  Vendedor Responsável *
-                </label>
-                <select
-                  value={formData.vendedorId}
-                  onChange={(e) => setFormData({ ...formData, vendedorId: e.target.value })}
-                  disabled={tipoUsuario === 'vendedor'}
-                  className={`w-full px-3 py-2 border ${tema.border} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.surface} ${tema.text}`}
-                >
-                  <option value="">Selecione um vendedor</option>
-                  {vendedores && Array.isArray(vendedores) && vendedores.filter((v: any) => v.status === 'Ativo').map((vendedor: any) => (
-                    <option key={vendedor.id} value={vendedor.id}>
-                      {vendedor.nome}
-                    </option>
-                  ))}
-                </select>
-                {erros.vendedorId && (
-                  <p className="text-red-500 text-xs mt-1">{erros.vendedorId}</p>
-                )}
-              </div>
+              {/* Vendedor Responsável - VERSÃO CORRIGIDA */}
+<div>
+  <label className={`block text-sm font-medium ${tema.text} mb-1`}>
+    Vendedor Responsável *
+  </label>
+  
+  {/* Debug - mostrar informações dos vendedores */}
+  {process.env.NODE_ENV === 'development' && (
+    <div className="text-xs text-gray-500 mb-2">
+      Debug: {vendedores ? `${vendedores.length} vendedores carregados` : 'Vendedores não carregados'}
+      {vendedores && vendedores.length > 0 && (
+        <div>Status encontrados: {[...new Set(vendedores.map(v => v.status))].join(', ')}</div>
+      )}
+    </div>
+  )}
+  
+  <select
+    value={formData.vendedorId}
+    onChange={(e) => setFormData({ ...formData, vendedorId: e.target.value })}
+    disabled={tipoUsuario === 'vendedor'}
+    className={`w-full px-3 py-2 border ${tema.border} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${tema.surface} ${tema.text}`}
+  >
+    <option value="">Selecione um vendedor</option>
+    
+    {/* FILTRO CORRIGIDO - aceita tanto 'Ativo' quanto 'ativo' */}
+    {vendedores && Array.isArray(vendedores) && 
+     vendedores
+       .filter((v: any) => {
+         // Aceita qualquer variação de capitalização de "ativo"
+         const status = String(v.status || '').toLowerCase();
+         return status === 'ativo' || status === 'active';
+       })
+       .map((vendedor: any) => (
+         <option key={vendedor.id} value={vendedor.id}>
+           {vendedor.nome} {process.env.NODE_ENV === 'development' && `(${vendedor.status})`}
+         </option>
+       ))
+    }
+    
+    {/* Fallback se não houver vendedores */}
+    {(!vendedores || !Array.isArray(vendedores) || vendedores.length === 0) && (
+      <option value="" disabled>Nenhum vendedor encontrado</option>
+    )}
+  </select>
+  
+  {erros.vendedorId && (
+    <p className="text-red-500 text-xs mt-1">{erros.vendedorId}</p>
+  )}
+</div>
+
 
               {/* Produtos */}
               <div>
