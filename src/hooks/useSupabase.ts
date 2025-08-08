@@ -1,4 +1,4 @@
-// src/hooks/useSupabase.ts
+// src/hooks/useSupabase.ts - VERSÃO COMPLETA COM CÓDIGO DE BARRAS
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -18,13 +18,13 @@ export const useSupabase = () => {
       setLoading(true);
       console.log('Tentando login com:', login);
       
-      // Buscar vendedor pelo login e senha
+      // Buscar vendedor pelo login e senha - ACEITA QUALQUER CAPITALIZAÇÃO DE STATUS
       const { data, error: err } = await supabase
         .from('vendedores')
         .select('*')
         .eq('login', login)
         .eq('senha', senha)
-        .eq('status', 'Ativo')
+        .or('status.eq.Ativo,status.eq.ativo,status.eq.ATIVO')
         .single();
 
       if (err || !data) {
@@ -179,21 +179,18 @@ export const useSupabase = () => {
     try {
       console.log('Adicionando produto:', produto);
       
-      // Mapear campos do frontend (camelCase) para o banco (snake_case)
       const produtoFormatado = {
         nome: produto.nome,
         descricao: produto.descricao || '',
-        codigo_barras: produto.codigoBarras || produto.codigo_barras || '',
+        codigo_barras: produto.codigo_barras,
         categoria: produto.categoria,
-        valor_custo: parseFloat(produto.valorCusto || produto.valor_custo || 0),
-        valor_venda: parseFloat(produto.valorVenda || produto.valor_venda || 0),
-        estoque: parseInt(produto.estoque || 0),
-        estoque_minimo: parseInt(produto.estoqueMinimo || produto.estoque_minimo || 0),
+        valor_custo: parseFloat(produto.valor_custo),
+        valor_venda: parseFloat(produto.valor_venda),
+        estoque: parseInt(produto.estoque),
+        estoque_minimo: parseInt(produto.estoque_minimo) || 0,
         ativo: produto.ativo !== false,
         data_cadastro: new Date().toISOString().split('T')[0]
       };
-
-      console.log('Produto formatado:', produtoFormatado);
 
       const { data, error: err } = await supabase
         .from('produtos')
@@ -216,22 +213,9 @@ export const useSupabase = () => {
     try {
       console.log('Atualizando produto:', id, updates);
       
-      // Mapear campos se necessário
-      const produtoFormatado = {
-        nome: updates.nome,
-        descricao: updates.descricao,
-        codigo_barras: updates.codigoBarras || updates.codigo_barras,
-        categoria: updates.categoria,
-        valor_custo: parseFloat(updates.valorCusto || updates.valor_custo || 0),
-        valor_venda: parseFloat(updates.valorVenda || updates.valor_venda || 0),
-        estoque: parseInt(updates.estoque || 0),
-        estoque_minimo: parseInt(updates.estoqueMinimo || updates.estoque_minimo || 0),
-        ativo: updates.ativo !== false
-      };
-
       const { data, error: err } = await supabase
         .from('produtos')
-        .update(produtoFormatado)
+        .update(updates)
         .eq('id', id)
         .select();
 
@@ -265,6 +249,38 @@ export const useSupabase = () => {
       console.error('❌ Erro ao excluir produto:', err);
       setError(err?.message || 'Erro ao excluir produto');
       return { success: false, error: err?.message || 'Erro desconhecido' };
+    }
+  };
+
+  // ========================================
+  // NOVA FUNÇÃO: BUSCAR PRODUTO POR CÓDIGO DE BARRAS
+  // ========================================
+  const buscarProdutoPorCodigo = async (codigoBarras: string) => {
+    try {
+      console.log('🔍 Buscando produto por código:', codigoBarras);
+      
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('*')
+        .eq('codigo_barras', codigoBarras.trim())
+        .eq('ativo', true)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        throw error;
+      }
+
+      if (!data) {
+        console.log('❌ Produto não encontrado:', codigoBarras);
+        return { success: false, error: 'Produto não encontrado ou inativo' };
+      }
+
+      console.log('✅ Produto encontrado:', data);
+      return { success: true, data: data };
+      
+    } catch (err: any) {
+      console.error('❌ Erro ao buscar produto:', err);
+      return { success: false, error: err?.message || 'Erro ao buscar produto' };
     }
   };
 
@@ -363,11 +379,13 @@ export const useSupabase = () => {
   };
 
   // ========================================
-  // CONSIGNAÇÕES
+  // CONSIGNAÇÕES - VERSÃO MELHORADA COM CÓDIGO DE BARRAS
   // ========================================
   const fetchConsignacoes = async () => {
     try {
       setLoading(true);
+      
+      // Buscar consignações com dados do vendedor
       const { data, error: err } = await supabase
         .from('consignacoes')
         .select(`
@@ -381,8 +399,31 @@ export const useSupabase = () => {
         .order('data_consignacao', { ascending: false });
       
       if (err) throw err;
-      setConsignacoes(data || []);
-      console.log('✅ Consignações carregadas:', data?.length);
+
+      // Para cada consignação, buscar os itens se existirem
+      const consignacaoComItens = await Promise.all(
+        (data || []).map(async (consignacao) => {
+          try {
+            const resultadoItens = await buscarItensConsignacao(consignacao.id);
+            return {
+              ...consignacao,
+              itens: resultadoItens.success ? resultadoItens.data : [],
+              produtos: consignacao.produtos ? JSON.parse(consignacao.produtos) : []
+            };
+          } catch (error) {
+            console.error('Erro ao buscar itens da consignação:', consignacao.id, error);
+            return {
+              ...consignacao,
+              itens: [],
+              produtos: consignacao.produtos ? JSON.parse(consignacao.produtos) : []
+            };
+          }
+        })
+      );
+
+      setConsignacoes(consignacaoComItens);
+      console.log('✅ Consignações carregadas:', consignacaoComItens.length);
+      
     } catch (err: any) {
       setError(err?.message || 'Erro ao carregar consignações');
       console.error('❌ Erro ao buscar consignações:', err);
@@ -393,50 +434,70 @@ export const useSupabase = () => {
 
   const adicionarConsignacao = async (consignacao: any) => {
     try {
-      console.log('Adicionando consignação:', consignacao);
+      console.log('📦 Adicionando consignação com produtos:', consignacao);
       
-      // Preparar dados com todos os campos corretos
+      // Preparar dados da consignação principal
       const consignacaoFormatada = {
         cliente_nome: String(consignacao.clienteNome || '').trim(),
-        cliente_documento: String(consignacao.clienteDocumento || '').replace(/\D/g, ''),
+        cliente_documento: String(consignacao.clienteDocumento || '').trim(),
         cliente_telefone: String(consignacao.clienteTelefone || '').trim(),
         tipo_documento: consignacao.tipoDocumento || 'cpf',
-        vendedor_id: parseInt(consignacao.vendedorId) || null,
-        quantidade_total: parseInt(consignacao.quantidadeTotal) || 0,
-        valor_total: parseFloat(consignacao.valorTotal) || 0,
-        data_consignacao: new Date().toISOString().split('T')[0],
-        data_retorno: null, // Inicialmente null
-        status: 'ativa',
-        observacoes: consignacao.observacoes || null,
-        retorno: null // JSONB - inicialmente null
+        vendedor_id: parseInt(consignacao.vendedorId),
+        data_consignacao: consignacao.data_consignacao || new Date().toISOString().split('T')[0],
+        data_vencimento: consignacao.data_vencimento || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        valor_total: consignacao.valor_total || 0,
+        quantidade_total: consignacao.produtos?.reduce((total: number, p: any) => total + p.quantidade, 0) || 0,
+        status: 'Aberta',
+        observacoes: consignacao.observacoes || '',
+        produtos: JSON.stringify(consignacao.produtos || []) // Backup dos produtos em JSON
       };
 
-      // Validação
-      if (!consignacaoFormatada.cliente_nome) {
-        throw new Error('Nome do cliente é obrigatório');
-      }
-      if (!consignacaoFormatada.cliente_documento) {
-        throw new Error('Documento do cliente é obrigatório');
-      }
-      if (!consignacaoFormatada.vendedor_id) {
-        throw new Error('Vendedor é obrigatório');
-      }
+      console.log('📋 Dados formatados para envio:', consignacaoFormatada);
 
-      console.log('Dados formatados para envio:', JSON.stringify(consignacaoFormatada, null, 2));
-
-      const { data, error: err } = await supabase
+      // 1. Inserir consignação principal
+      const { data: consignacaoData, error: consignacaoError } = await supabase
         .from('consignacoes')
         .insert([consignacaoFormatada])
-        .select();
+        .select()
+        .single();
 
-      if (err) {
-        console.error('❌ Erro do Supabase:', err);
-        throw err;
+      if (consignacaoError) throw consignacaoError;
+
+      console.log('✅ Consignação principal criada:', consignacaoData);
+
+      // 2. Inserir itens da consignação na tabela de itens (se a tabela existir)
+      if (consignacao.produtos && consignacao.produtos.length > 0) {
+        try {
+          const itensConsignacao = consignacao.produtos.map((produto: any) => ({
+            consignacao_id: consignacaoData.id,
+            produto_id: produto.produto_id,
+            quantidade_deixada: produto.quantidade,
+            quantidade_retornada: 0,
+            quantidade_vendida: 0,
+            valor_unitario: produto.valor_unitario,
+            valor_total_deixado: produto.valor_total,
+            valor_total_vendido: 0
+          }));
+
+          const { error: itensError } = await supabase
+            .from('consignacao_itens')
+            .insert(itensConsignacao);
+
+          if (itensError) {
+            console.warn('⚠️ Não foi possível inserir itens detalhados (tabela pode não existir):', itensError);
+            // Não falha a operação, apenas não insere na tabela de detalhes
+          } else {
+            console.log('✅ Itens da consignação inseridos na tabela de detalhes');
+          }
+        } catch (error) {
+          console.warn('⚠️ Erro ao inserir itens detalhados:', error);
+          // Continua sem falhar
+        }
       }
-      
-      console.log('✅ Consignação adicionada com sucesso:', data);
+
       await fetchConsignacoes();
-      return { success: true, data: data || [] };
+      return { success: true, data: [consignacaoData] };
+      
     } catch (err: any) {
       console.error('❌ Erro ao adicionar consignação:', err);
       const mensagemErro = err?.message || 'Erro ao adicionar consignação';
@@ -447,26 +508,45 @@ export const useSupabase = () => {
 
   const finalizarConsignacao = async (id: any, dadosRetorno: any) => {
     try {
-      console.log('Finalizando consignação ID:', id);
-      console.log('Dados do retorno:', dadosRetorno);
-      
-      // Preparar o objeto JSON para a coluna retorno
-      const retornoJson = {
-        quantidadeRetornada: parseInt(dadosRetorno.quantidadeRetornada) || 0,
-        quantidadeVendida: parseInt(dadosRetorno.quantidadeVendida) || 0,
-        valorRetornado: parseFloat(dadosRetorno.valorRetornado) || 0,
-        valorDevido: parseFloat(dadosRetorno.valorDevido) || 0,
-        observacoes: dadosRetorno.observacoes || '',
-        dataFinalizacao: new Date().toISOString()
-      };
+      console.log('🏁 Finalizando consignação:', id, dadosRetorno);
 
+      // 1. Tentar atualizar itens com dados de retorno (se a tabela existir)
+      if (dadosRetorno.produtos_retorno && dadosRetorno.produtos_retorno.length > 0) {
+        try {
+          for (const produtoRetorno of dadosRetorno.produtos_retorno) {
+            const { error: itemError } = await supabase
+              .from('consignacao_itens')
+              .update({
+                quantidade_retornada: produtoRetorno.quantidade_retornada,
+                quantidade_vendida: produtoRetorno.quantidade_vendida,
+                valor_total_vendido: produtoRetorno.quantidade_vendida * produtoRetorno.valor_unitario,
+                updated_at: new Date().toISOString()
+              })
+              .eq('consignacao_id', id)
+              .eq('produto_id', produtoRetorno.produto_id);
+
+            if (itemError) {
+              console.warn('⚠️ Erro ao atualizar item detalhado:', itemError);
+              // Continua sem falhar
+            }
+          }
+          console.log('✅ Itens detalhados atualizados');
+        } catch (error) {
+          console.warn('⚠️ Não foi possível atualizar itens detalhados:', error);
+          // Continua sem falhar
+        }
+      }
+
+      // 2. Atualizar consignação principal
       const updates = {
-        status: 'finalizada',
-        data_retorno: new Date().toISOString().split('T')[0],
-        retorno: retornoJson // JSONB
+        status: 'Finalizada',
+        data_finalizacao: new Date().toISOString().split('T')[0],
+        valor_retornado: dadosRetorno.valor_retornado || 0,
+        valor_vendido: dadosRetorno.valor_vendido || 0,
+        produtos_retorno: JSON.stringify(dadosRetorno.produtos_retorno || []),
+        observacoes_retorno: dadosRetorno.observacoes || '',
+        updated_at: new Date().toISOString()
       };
-
-      console.log('Updates para envio:', JSON.stringify(updates, null, 2));
 
       const { data, error: err } = await supabase
         .from('consignacoes')
@@ -475,13 +555,14 @@ export const useSupabase = () => {
         .select();
 
       if (err) {
-        console.error('❌ Erro ao finalizar:', err);
+        console.error('❌ Erro ao finalizar consignação:', err);
         throw err;
       }
       
       console.log('✅ Consignação finalizada:', data);
       await fetchConsignacoes();
       return { success: true, data: data || [] };
+      
     } catch (err: any) {
       console.error('❌ Erro ao finalizar consignação:', err);
       const mensagemErro = err?.message || 'Erro ao finalizar consignação';
@@ -492,8 +573,21 @@ export const useSupabase = () => {
 
   const excluirConsignacao = async (id: any) => {
     try {
-      console.log('Excluindo consignação:', id);
+      console.log('🗑️ Excluindo consignação:', id);
       
+      // Tentar excluir itens primeiro (se a tabela existir)
+      try {
+        await supabase
+          .from('consignacao_itens')
+          .delete()
+          .eq('consignacao_id', id);
+        console.log('✅ Itens da consignação excluídos');
+      } catch (error) {
+        console.warn('⚠️ Não foi possível excluir itens (tabela pode não existir):', error);
+        // Continua sem falhar
+      }
+      
+      // Excluir consignação principal
       const { error: err } = await supabase
         .from('consignacoes')
         .delete()
@@ -512,6 +606,68 @@ export const useSupabase = () => {
   };
 
   // ========================================
+  // NOVA FUNÇÃO: BUSCAR ITENS DA CONSIGNAÇÃO
+  // ========================================
+  const buscarItensConsignacao = async (consignacaoId: number) => {
+    try {
+      console.log('🔍 Buscando itens da consignação:', consignacaoId);
+      
+      const { data, error } = await supabase
+        .from('consignacao_itens')
+        .select(`
+          *,
+          produtos (
+            id,
+            nome,
+            descricao,
+            codigo_barras,
+            categoria,
+            valor_venda
+          )
+        `)
+        .eq('consignacao_id', consignacaoId)
+        .order('id');
+
+      if (error) {
+        // Se a tabela não existir, não é um erro crítico
+        if (error.code === '42P01') { // relation does not exist
+          console.log('ℹ️ Tabela consignacao_itens não existe ainda');
+          return { success: true, data: [] };
+        }
+        throw error;
+      }
+
+      console.log('✅ Itens encontrados:', data?.length || 0);
+      return { success: true, data: data || [] };
+      
+    } catch (err: any) {
+      console.error('❌ Erro ao buscar itens:', err);
+      return { success: false, error: err?.message || 'Erro ao buscar itens' };
+    }
+  };
+
+  // ========================================
+  // FUNÇÃO PARA VALIDAR QUANTIDADE DE RETORNO
+  // ========================================
+  const validarQuantidadeRetorno = (
+    quantidadeDeixada: number, 
+    quantidadeRetornada: number
+  ): { valido: boolean; erro?: string } => {
+    if (quantidadeRetornada < 0) {
+      return { valido: false, erro: 'Quantidade não pode ser negativa' };
+    }
+    
+    if (quantidadeRetornada > quantidadeDeixada) {
+      return { 
+        valido: false, 
+        erro: `Quantidade de retorno (${quantidadeRetornada}) não pode ser maior que a deixada (${quantidadeDeixada})` 
+      };
+    }
+    
+    return { valido: true };
+  };
+
+  // ========================================
   // FUNÇÃO PARA RECARREGAR TODOS OS DADOS
   // ========================================
   const refetch = async () => {
@@ -526,6 +682,32 @@ export const useSupabase = () => {
   };
 
   // ========================================
+  // FUNÇÃO PARA OBTER ESTATÍSTICAS
+  // ========================================
+  const obterEstatisticas = () => {
+    const estatisticas = {
+      vendedores: {
+        total: vendedores.length,
+        ativos: vendedores.filter(v => String(v.status).toLowerCase() === 'ativo').length
+      },
+      produtos: {
+        total: produtos.length,
+        ativos: produtos.filter(p => p.ativo).length,
+        categorias: [...new Set(produtos.map(p => p.categoria))].length
+      },
+      consignacoes: {
+        total: consignacoes.length,
+        abertas: consignacoes.filter(c => c.status === 'Aberta').length,
+        finalizadas: consignacoes.filter(c => c.status === 'Finalizada').length,
+        valorTotal: consignacoes.reduce((total, c) => total + (c.valor_total || 0), 0),
+        valorVendido: consignacoes.reduce((total, c) => total + (c.valor_vendido || 0), 0)
+      }
+    };
+
+    return estatisticas;
+  };
+
+  // ========================================
   // RETORNO DO HOOK
   // ========================================
   return {
@@ -537,30 +719,34 @@ export const useSupabase = () => {
     loading,
     error,
     
-    // Funções
+    // Função de Login
     fazerLogin,
     
-    // Vendedores
+    // CRUD Vendedores
     adicionarVendedor,
     atualizarVendedor,
     excluirVendedor,
     
-    // Produtos
+    // CRUD Produtos
     adicionarProduto,
     atualizarProduto,
     excluirProduto,
+    buscarProdutoPorCodigo, // ← NOVA
     
-    // Categorias
+    // CRUD Categorias
     adicionarCategoria,
     atualizarCategoria,
     excluirCategoria,
     
-    // Consignações
+    // CRUD Consignações (MELHORADAS)
     adicionarConsignacao,
     finalizarConsignacao,
     excluirConsignacao,
+    buscarItensConsignacao, // ← NOVA
     
-    // Utilitários
+    // Funções Auxiliares
+    validarQuantidadeRetorno, // ← NOVA
+    obterEstatisticas, // ← NOVA
     refetch
   };
 };
