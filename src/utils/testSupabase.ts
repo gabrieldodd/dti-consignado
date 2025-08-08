@@ -10,45 +10,42 @@ export const testarConexaoSupabase = async () => {
     console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
     console.log('VITE_SUPABASE_ANON_KEY:', import.meta.env.VITE_SUPABASE_ANON_KEY ? '✅ Definida' : '❌ Não definida');
     
-    // Teste 2: Ping básico ao Supabase
-    const { data: pingData, error: pingError } = await supabase
+    // Teste 2: Ping básico ao Supabase (CORRIGIDO)
+    const { data: pingData, error: pingError, count: pingCount } = await supabase
       .from('vendedores')
-      .select('count(*)')
-      .limit(1);
+      .select('*', { count: 'exact', head: true });
     
     if (pingError) {
       console.error('❌ Erro no ping:', pingError);
       throw pingError;
     }
     
-    console.log('✅ Ping bem-sucedido:', pingData);
+    console.log('✅ Ping bem-sucedido. Registros encontrados:', pingCount);
     
     // Teste 3: Verificar se as tabelas existem
     const tabelas = ['vendedores', 'produtos', 'categorias', 'consignacoes'];
     
     for (const tabela of tabelas) {
       try {
-        const { data, error } = await supabase
+        const { data, error, count } = await supabase
           .from(tabela)
-          .select('count(*)')
-          .limit(1);
+          .select('*', { count: 'exact', head: true });
           
         if (error) throw error;
-        console.log(`✅ Tabela '${tabela}' existe e tem ${data?.[0]?.count || 0} registros`);
+        console.log(`✅ Tabela '${tabela}' existe e tem ${count || 0} registros`);
       } catch (err) {
         console.error(`❌ Erro na tabela '${tabela}':`, err);
       }
     }
     
-    // Teste 4: Teste de inserção básica (se não houver vendedores)
-    const { data: vendedores, error: vendedoresError } = await supabase
+    // Teste 4: Teste de inserção básica (se não houver vendedores) (CORRIGIDO)
+    const { data: vendedores, error: vendedoresError, count: vendedoresCount } = await supabase
       .from('vendedores')
-      .select('count(*)')
-      .single();
+      .select('*', { count: 'exact', head: true });
     
     if (vendedoresError) throw vendedoresError;
     
-    if (vendedores?.count === 0) {
+    if (vendedoresCount === 0) {
       console.log('📝 Inserindo vendedor de teste...');
       const { data: novoVendedor, error: insertError } = await supabase
         .from('vendedores')
