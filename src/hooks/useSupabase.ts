@@ -1,4 +1,4 @@
-// src/hooks/useSupabase.ts - VERSÃO COMPLETA COM CÓDIGO DE BARRAS
+// src/hooks/useSupabase.ts - Versão Completa Melhorada
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -11,31 +11,95 @@ export const useSupabase = () => {
   const [error, setError] = useState<string | null>(null);
 
   // ========================================
+  // FUNÇÕES UTILITÁRIAS DE ERRO E VALIDAÇÃO
+  // ========================================
+  const tratarErro = (erro: any, operacao: string) => {
+    console.error(`❌ Erro na operação: ${operacao}`, erro);
+    
+    let mensagem = `Erro ao ${operacao}`;
+    
+    if (erro?.message) {
+      if (erro.message.includes('column') && erro.message.includes('does not exist')) {
+        mensagem = `Erro de schema: Coluna não existe no banco. Execute o SQL de correção.`;
+      } else if (erro.message.includes('JWT') || erro.message.includes('Invalid API key')) {
+        mensagem = 'Erro de autenticação. Verifique as credenciais do Supabase no arquivo .env';
+      } else if (erro.message.includes('violates')) {
+        mensagem = 'Dados inválidos ou duplicados.';
+      } else if (erro.message.includes('relation') && erro.message.includes('does not exist')) {
+        mensagem = 'Tabela não existe no banco. Verifique o schema do Supabase.';
+      } else {
+        mensagem = erro.message;
+      }
+    }
+    
+    setError(mensagem);
+    return { success: false, error: mensagem };
+  };
+
+  const validarDados = (dados: any, tipo: string) => {
+    const erros: string[] = [];
+    
+    switch (tipo) {
+      case 'vendedor':
+        if (!dados.nome?.trim()) erros.push('Nome do vendedor é obrigatório');
+        if (!dados.email?.trim()) erros.push('Email é obrigatório');
+        if (!dados.login?.trim()) erros.push('Login é obrigatório');
+        if (!dados.senha?.trim()) erros.push('Senha é obrigatória');
+        break;
+        
+      case 'produto':
+        if (!dados.nome?.trim()) erros.push('Nome do produto é obrigatório');
+        if (!dados.categoria?.trim()) erros.push('Categoria é obrigatória');
+        if (!dados.valor_venda && !dados.valorVenda) erros.push('Valor de venda é obrigatório');
+        break;
+        
+      case 'categoria':
+        if (!dados.nome?.trim()) erros.push('Nome da categoria é obrigatório');
+        break;
+        
+      case 'consignacao':
+        if (!dados.clienteNome?.trim() && !dados.cliente_nome?.trim()) erros.push('Nome do cliente é obrigatório');
+        if (!dados.clienteDocumento?.trim() && !dados.cliente_documento?.trim()) erros.push('Documento do cliente é obrigatório');
+        if (!dados.vendedorId && !dados.vendedor_id) erros.push('Vendedor é obrigatório');
+        break;
+    }
+    
+    if (erros.length > 0) {
+      throw new Error(erros.join(', '));
+    }
+  };
+
+  // ========================================
   // FUNÇÃO DE LOGIN
   // ========================================
   const fazerLogin = async (login: string, senha: string) => {
     try {
       setLoading(true);
-      console.log('Tentando login com:', login);
+      console.log('🔐 Tentando login com:', login);
       
-      // Buscar vendedor pelo login e senha - ACEITA QUALQUER CAPITALIZAÇÃO DE STATUS
+      if (!login?.trim() || !senha?.trim()) {
+        console.error('❌ Login ou senha vazios');
+        return null;
+      }
+      
       const { data, error: err } = await supabase
         .from('vendedores')
         .select('*')
-        .eq('login', login)
-        .eq('senha', senha)
-        .or('status.eq.Ativo,status.eq.ativo,status.eq.ATIVO')
+        .eq('login', login.trim())
+        .eq('senha', senha.trim())
+        .eq('status', 'Ativo')
         .single();
 
       if (err || !data) {
-        console.error('Erro no login:', err);
+        console.error('❌ Erro no login:', err?.message || 'Credenciais inválidas');
         return null;
       }
 
-      console.log('Login bem-sucedido:', data);
+      console.log('✅ Login bem-sucedido:', data.nome);
       return data;
-    } catch (error) {
-      console.error('Erro ao fazer login:', error);
+    } catch (error: any) {
+      console.error('❌ Erro crítico no login:', error);
+      tratarErro(error, 'fazer login');
       return null;
     } finally {
       setLoading(false);
@@ -43,37 +107,24 @@ export const useSupabase = () => {
   };
 
   // ========================================
-  // FETCH INICIAL DE DADOS
-  // ========================================
-  useEffect(() => {
-    const carregarDados = async () => {
-      await Promise.all([
-        fetchVendedores(),
-        fetchProdutos(),
-        fetchCategorias(),
-        fetchConsignacoes()
-      ]);
-    };
-    carregarDados();
-  }, []);
-
-  // ========================================
-  // VENDEDORES
+  // VENDEDORES - CRUD COMPLETO
   // ========================================
   const fetchVendedores = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando vendedores...');
+      
       const { data, error: err } = await supabase
         .from('vendedores')
         .select('*')
         .order('nome');
       
       if (err) throw err;
+      
       setVendedores(data || []);
       console.log('✅ Vendedores carregados:', data?.length);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao carregar vendedores');
-      console.error('❌ Erro ao buscar vendedores:', err);
+      tratarErro(err, 'carregar vendedores');
     } finally {
       setLoading(false);
     }
@@ -81,17 +132,22 @@ export const useSupabase = () => {
 
   const adicionarVendedor = async (vendedor: any) => {
     try {
-      console.log('Adicionando vendedor:', vendedor);
+      console.log('➕ Adicionando vendedor:', vendedor);
+      
+      // Validar dados
+      validarDados(vendedor, 'vendedor');
       
       const vendedorFormatado = {
-        nome: vendedor.nome,
-        email: vendedor.email,
-        telefone: vendedor.telefone,
+        nome: String(vendedor.nome || '').trim(),
+        email: String(vendedor.email || '').trim().toLowerCase(),
+        telefone: String(vendedor.telefone || '').trim(),
         status: vendedor.status || 'Ativo',
-        login: vendedor.login,
-        senha: vendedor.senha,
+        login: String(vendedor.login || '').trim(),
+        senha: String(vendedor.senha || '').trim(),
         data_cadastro: new Date().toISOString().split('T')[0]
       };
+
+      console.log('📤 Dados formatados:', vendedorFormatado);
 
       const { data, error: err } = await supabase
         .from('vendedores')
@@ -104,19 +160,38 @@ export const useSupabase = () => {
       await fetchVendedores();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao adicionar vendedor:', err);
-      setError(err?.message || 'Erro ao adicionar vendedor');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'adicionar vendedor');
     }
   };
 
   const atualizarVendedor = async (id: any, updates: any) => {
     try {
-      console.log('Atualizando vendedor:', id, updates);
+      console.log('✏️ Atualizando vendedor:', id, updates);
       
+      if (!id) throw new Error('ID do vendedor é obrigatório');
+      
+      // Preparar dados para atualização
+      const dadosFormatados = {
+        nome: updates.nome ? String(updates.nome).trim() : undefined,
+        email: updates.email ? String(updates.email).trim().toLowerCase() : undefined,
+        telefone: updates.telefone ? String(updates.telefone).trim() : undefined,
+        status: updates.status || undefined,
+        login: updates.login ? String(updates.login).trim() : undefined,
+        senha: updates.senha ? String(updates.senha).trim() : undefined
+      };
+
+      // Remover propriedades undefined
+      const dadosLimpos = Object.fromEntries(
+        Object.entries(dadosFormatados).filter(([_, value]) => value !== undefined)
+      );
+
+      if (Object.keys(dadosLimpos).length === 0) {
+        throw new Error('Nenhum dado válido para atualizar');
+      }
+
       const { data, error: err } = await supabase
         .from('vendedores')
-        .update(updates)
+        .update(dadosLimpos)
         .eq('id', id)
         .select();
 
@@ -126,15 +201,15 @@ export const useSupabase = () => {
       await fetchVendedores();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao atualizar vendedor:', err);
-      setError(err?.message || 'Erro ao atualizar vendedor');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'atualizar vendedor');
     }
   };
 
   const excluirVendedor = async (id: any) => {
     try {
-      console.log('Excluindo vendedor:', id);
+      console.log('🗑️ Excluindo vendedor:', id);
+      
+      if (!id) throw new Error('ID do vendedor é obrigatório');
       
       const { error: err } = await supabase
         .from('vendedores')
@@ -147,29 +222,29 @@ export const useSupabase = () => {
       await fetchVendedores();
       return { success: true };
     } catch (err: any) {
-      console.error('❌ Erro ao excluir vendedor:', err);
-      setError(err?.message || 'Erro ao excluir vendedor');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'excluir vendedor');
     }
   };
 
   // ========================================
-  // PRODUTOS
+  // PRODUTOS - CRUD COMPLETO
   // ========================================
   const fetchProdutos = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando produtos...');
+      
       const { data, error: err } = await supabase
         .from('produtos')
         .select('*')
         .order('nome');
       
       if (err) throw err;
+      
       setProdutos(data || []);
       console.log('✅ Produtos carregados:', data?.length);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao carregar produtos');
-      console.error('❌ Erro ao buscar produtos:', err);
+      tratarErro(err, 'carregar produtos');
     } finally {
       setLoading(false);
     }
@@ -177,20 +252,26 @@ export const useSupabase = () => {
 
   const adicionarProduto = async (produto: any) => {
     try {
-      console.log('Adicionando produto:', produto);
+      console.log('➕ Adicionando produto:', produto);
       
+      // Validar dados
+      validarDados(produto, 'produto');
+      
+      // Mapear campos do frontend (camelCase) para o banco (snake_case)
       const produtoFormatado = {
-        nome: produto.nome,
-        descricao: produto.descricao || '',
-        codigo_barras: produto.codigo_barras,
-        categoria: produto.categoria,
-        valor_custo: parseFloat(produto.valor_custo),
-        valor_venda: parseFloat(produto.valor_venda),
-        estoque: parseInt(produto.estoque),
-        estoque_minimo: parseInt(produto.estoque_minimo) || 0,
+        nome: String(produto.nome || '').trim(),
+        descricao: String(produto.descricao || '').trim(),
+        codigo_barras: String(produto.codigoBarras || produto.codigo_barras || '').trim(),
+        categoria: String(produto.categoria || '').trim(),
+        valor_custo: parseFloat(produto.valorCusto || produto.valor_custo || 0),
+        valor_venda: parseFloat(produto.valorVenda || produto.valor_venda || 0),
+        estoque: parseInt(produto.estoque || 0),
+        estoque_minimo: parseInt(produto.estoqueMinimo || produto.estoque_minimo || 0),
         ativo: produto.ativo !== false,
         data_cadastro: new Date().toISOString().split('T')[0]
       };
+
+      console.log('📤 Produto formatado:', produtoFormatado);
 
       const { data, error: err } = await supabase
         .from('produtos')
@@ -203,19 +284,41 @@ export const useSupabase = () => {
       await fetchProdutos();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao adicionar produto:', err);
-      setError(err?.message || 'Erro ao adicionar produto');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'adicionar produto');
     }
   };
 
   const atualizarProduto = async (id: any, updates: any) => {
     try {
-      console.log('Atualizando produto:', id, updates);
+      console.log('✏️ Atualizando produto:', id, updates);
       
+      if (!id) throw new Error('ID do produto é obrigatório');
+      
+      // Mapear campos se necessário
+      const produtoFormatado = {
+        nome: updates.nome ? String(updates.nome).trim() : undefined,
+        descricao: updates.descricao ? String(updates.descricao).trim() : undefined,
+        codigo_barras: updates.codigoBarras || updates.codigo_barras || undefined,
+        categoria: updates.categoria ? String(updates.categoria).trim() : undefined,
+        valor_custo: updates.valorCusto || updates.valor_custo ? parseFloat(updates.valorCusto || updates.valor_custo) : undefined,
+        valor_venda: updates.valorVenda || updates.valor_venda ? parseFloat(updates.valorVenda || updates.valor_venda) : undefined,
+        estoque: updates.estoque !== undefined ? parseInt(updates.estoque) : undefined,
+        estoque_minimo: updates.estoqueMinimo || updates.estoque_minimo !== undefined ? parseInt(updates.estoqueMinimo || updates.estoque_minimo) : undefined,
+        ativo: updates.ativo !== undefined ? updates.ativo : undefined
+      };
+
+      // Remover propriedades undefined
+      const dadosLimpos = Object.fromEntries(
+        Object.entries(produtoFormatado).filter(([_, value]) => value !== undefined)
+      );
+
+      if (Object.keys(dadosLimpos).length === 0) {
+        throw new Error('Nenhum dado válido para atualizar');
+      }
+
       const { data, error: err } = await supabase
         .from('produtos')
-        .update(updates)
+        .update(dadosLimpos)
         .eq('id', id)
         .select();
 
@@ -225,15 +328,15 @@ export const useSupabase = () => {
       await fetchProdutos();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao atualizar produto:', err);
-      setError(err?.message || 'Erro ao atualizar produto');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'atualizar produto');
     }
   };
 
   const excluirProduto = async (id: any) => {
     try {
-      console.log('Excluindo produto:', id);
+      console.log('🗑️ Excluindo produto:', id);
+      
+      if (!id) throw new Error('ID do produto é obrigatório');
       
       const { error: err } = await supabase
         .from('produtos')
@@ -246,61 +349,29 @@ export const useSupabase = () => {
       await fetchProdutos();
       return { success: true };
     } catch (err: any) {
-      console.error('❌ Erro ao excluir produto:', err);
-      setError(err?.message || 'Erro ao excluir produto');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'excluir produto');
     }
   };
 
   // ========================================
-  // NOVA FUNÇÃO: BUSCAR PRODUTO POR CÓDIGO DE BARRAS
-  // ========================================
-  const buscarProdutoPorCodigo = async (codigoBarras: string) => {
-    try {
-      console.log('🔍 Buscando produto por código:', codigoBarras);
-      
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*')
-        .eq('codigo_barras', codigoBarras.trim())
-        .eq('ativo', true)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-        throw error;
-      }
-
-      if (!data) {
-        console.log('❌ Produto não encontrado:', codigoBarras);
-        return { success: false, error: 'Produto não encontrado ou inativo' };
-      }
-
-      console.log('✅ Produto encontrado:', data);
-      return { success: true, data: data };
-      
-    } catch (err: any) {
-      console.error('❌ Erro ao buscar produto:', err);
-      return { success: false, error: err?.message || 'Erro ao buscar produto' };
-    }
-  };
-
-  // ========================================
-  // CATEGORIAS
+  // CATEGORIAS - CRUD COMPLETO
   // ========================================
   const fetchCategorias = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando categorias...');
+      
       const { data, error: err } = await supabase
         .from('categorias')
         .select('*')
         .order('nome');
       
       if (err) throw err;
+      
       setCategorias(data || []);
       console.log('✅ Categorias carregadas:', data?.length);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao carregar categorias');
-      console.error('❌ Erro ao buscar categorias:', err);
+      tratarErro(err, 'carregar categorias');
     } finally {
       setLoading(false);
     }
@@ -308,15 +379,20 @@ export const useSupabase = () => {
 
   const adicionarCategoria = async (categoria: any) => {
     try {
-      console.log('Adicionando categoria:', categoria);
+      console.log('➕ Adicionando categoria:', categoria);
+      
+      // Validar dados
+      validarDados(categoria, 'categoria');
       
       const categoriaFormatada = {
-        nome: categoria.nome,
-        descricao: categoria.descricao || '',
+        nome: String(categoria.nome || '').trim(),
+        descricao: String(categoria.descricao || '').trim(),
         cor: categoria.cor || '#3B82F6',
         ativa: categoria.ativa !== false,
         data_cadastro: new Date().toISOString().split('T')[0]
       };
+
+      console.log('📤 Categoria formatada:', categoriaFormatada);
 
       const { data, error: err } = await supabase
         .from('categorias')
@@ -329,19 +405,36 @@ export const useSupabase = () => {
       await fetchCategorias();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao adicionar categoria:', err);
-      setError(err?.message || 'Erro ao adicionar categoria');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'adicionar categoria');
     }
   };
 
   const atualizarCategoria = async (id: any, updates: any) => {
     try {
-      console.log('Atualizando categoria:', id, updates);
+      console.log('✏️ Atualizando categoria:', id, updates);
       
+      if (!id) throw new Error('ID da categoria é obrigatório');
+      
+      // Preparar dados para atualização
+      const dadosFormatados = {
+        nome: updates.nome ? String(updates.nome).trim() : undefined,
+        descricao: updates.descricao ? String(updates.descricao).trim() : undefined,
+        cor: updates.cor || undefined,
+        ativa: updates.ativa !== undefined ? updates.ativa : undefined
+      };
+
+      // Remover propriedades undefined
+      const dadosLimpos = Object.fromEntries(
+        Object.entries(dadosFormatados).filter(([_, value]) => value !== undefined)
+      );
+
+      if (Object.keys(dadosLimpos).length === 0) {
+        throw new Error('Nenhum dado válido para atualizar');
+      }
+
       const { data, error: err } = await supabase
         .from('categorias')
-        .update(updates)
+        .update(dadosLimpos)
         .eq('id', id)
         .select();
 
@@ -351,15 +444,15 @@ export const useSupabase = () => {
       await fetchCategorias();
       return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao atualizar categoria:', err);
-      setError(err?.message || 'Erro ao atualizar categoria');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'atualizar categoria');
     }
   };
 
   const excluirCategoria = async (id: any) => {
     try {
-      console.log('Excluindo categoria:', id);
+      console.log('🗑️ Excluindo categoria:', id);
+      
+      if (!id) throw new Error('ID da categoria é obrigatório');
       
       const { error: err } = await supabase
         .from('categorias')
@@ -372,20 +465,18 @@ export const useSupabase = () => {
       await fetchCategorias();
       return { success: true };
     } catch (err: any) {
-      console.error('❌ Erro ao excluir categoria:', err);
-      setError(err?.message || 'Erro ao excluir categoria');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'excluir categoria');
     }
   };
 
   // ========================================
-  // CONSIGNAÇÕES - VERSÃO MELHORADA COM CÓDIGO DE BARRAS
+  // CONSIGNAÇÕES - CRUD COMPLETO
   // ========================================
   const fetchConsignacoes = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Carregando consignações...');
       
-      // Buscar consignações com dados do vendedor
       const { data, error: err } = await supabase
         .from('consignacoes')
         .select(`
@@ -399,34 +490,11 @@ export const useSupabase = () => {
         .order('data_consignacao', { ascending: false });
       
       if (err) throw err;
-
-      // Para cada consignação, buscar os itens se existirem
-      const consignacaoComItens = await Promise.all(
-        (data || []).map(async (consignacao) => {
-          try {
-            const resultadoItens = await buscarItensConsignacao(consignacao.id);
-            return {
-              ...consignacao,
-              itens: resultadoItens.success ? resultadoItens.data : [],
-              produtos: consignacao.produtos ? JSON.parse(consignacao.produtos) : []
-            };
-          } catch (error) {
-            console.error('Erro ao buscar itens da consignação:', consignacao.id, error);
-            return {
-              ...consignacao,
-              itens: [],
-              produtos: consignacao.produtos ? JSON.parse(consignacao.produtos) : []
-            };
-          }
-        })
-      );
-
-      setConsignacoes(consignacaoComItens);
-      console.log('✅ Consignações carregadas:', consignacaoComItens.length);
       
+      setConsignacoes(data || []);
+      console.log('✅ Consignações carregadas:', data?.length);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao carregar consignações');
-      console.error('❌ Erro ao buscar consignações:', err);
+      tratarErro(err, 'carregar consignações');
     } finally {
       setLoading(false);
     }
@@ -434,140 +502,96 @@ export const useSupabase = () => {
 
   const adicionarConsignacao = async (consignacao: any) => {
     try {
-      console.log('📦 Adicionando consignação com produtos:', consignacao);
+      console.log('➕ Adicionando consignação:', consignacao);
       
-      // Preparar dados da consignação principal
+      // Validar dados
+      validarDados(consignacao, 'consignacao');
+      
+      // Preparar dados com todos os campos corretos
       const consignacaoFormatada = {
         cliente_nome: String(consignacao.clienteNome || '').trim(),
-        cliente_documento: String(consignacao.clienteDocumento || '').trim(),
+        cliente_documento: String(consignacao.clienteDocumento || '').replace(/\D/g, ''),
         cliente_telefone: String(consignacao.clienteTelefone || '').trim(),
         tipo_documento: consignacao.tipoDocumento || 'cpf',
-        vendedor_id: parseInt(consignacao.vendedorId),
-        data_consignacao: consignacao.data_consignacao || new Date().toISOString().split('T')[0],
-        data_vencimento: consignacao.data_vencimento || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        valor_total: consignacao.valor_total || 0,
-        quantidade_total: consignacao.produtos?.reduce((total: number, p: any) => total + p.quantidade, 0) || 0,
-        status: 'Aberta',
-        observacoes: consignacao.observacoes || '',
-        produtos: JSON.stringify(consignacao.produtos || []) // Backup dos produtos em JSON
+        vendedor_id: parseInt(consignacao.vendedorId) || null,
+        quantidade_total: parseInt(consignacao.quantidadeTotal) || 0,
+        valor_total: parseFloat(consignacao.valorTotal) || 0,
+        data_consignacao: new Date().toISOString().split('T')[0],
+        data_retorno: null,
+        status: 'ativa',
+        observacoes: consignacao.observacoes || null,
+        retorno: null
       };
 
-      console.log('📋 Dados formatados para envio:', consignacaoFormatada);
+      console.log('📤 Dados formatados para envio:', JSON.stringify(consignacaoFormatada, null, 2));
 
-      // 1. Inserir consignação principal
-      const { data: consignacaoData, error: consignacaoError } = await supabase
+      const { data, error: err } = await supabase
         .from('consignacoes')
         .insert([consignacaoFormatada])
-        .select()
-        .single();
+        .select(`
+          *,
+          vendedores (
+            id,
+            nome,
+            email
+          )
+        `);
 
-      if (consignacaoError) throw consignacaoError;
-
-      console.log('✅ Consignação principal criada:', consignacaoData);
-
-      // 2. Inserir itens da consignação na tabela de itens (se a tabela existir)
-      if (consignacao.produtos && consignacao.produtos.length > 0) {
-        try {
-          const itensConsignacao = consignacao.produtos.map((produto: any) => ({
-            consignacao_id: consignacaoData.id,
-            produto_id: produto.produto_id,
-            quantidade_deixada: produto.quantidade,
-            quantidade_retornada: 0,
-            quantidade_vendida: 0,
-            valor_unitario: produto.valor_unitario,
-            valor_total_deixado: produto.valor_total,
-            valor_total_vendido: 0
-          }));
-
-          const { error: itensError } = await supabase
-            .from('consignacao_itens')
-            .insert(itensConsignacao);
-
-          if (itensError) {
-            console.warn('⚠️ Não foi possível inserir itens detalhados (tabela pode não existir):', itensError);
-            // Não falha a operação, apenas não insere na tabela de detalhes
-          } else {
-            console.log('✅ Itens da consignação inseridos na tabela de detalhes');
-          }
-        } catch (error) {
-          console.warn('⚠️ Erro ao inserir itens detalhados:', error);
-          // Continua sem falhar
-        }
-      }
-
-      await fetchConsignacoes();
-      return { success: true, data: [consignacaoData] };
+      if (err) throw err;
       
+      console.log('✅ Consignação adicionada com sucesso:', data);
+      await fetchConsignacoes();
+      return { success: true, data: data || [] };
     } catch (err: any) {
-      console.error('❌ Erro ao adicionar consignação:', err);
-      const mensagemErro = err?.message || 'Erro ao adicionar consignação';
-      setError(mensagemErro);
-      return { success: false, error: mensagemErro };
+      return tratarErro(err, 'adicionar consignação');
     }
   };
 
   const finalizarConsignacao = async (id: any, dadosRetorno: any) => {
     try {
-      console.log('🏁 Finalizando consignação:', id, dadosRetorno);
-
-      // 1. Tentar atualizar itens com dados de retorno (se a tabela existir)
-      if (dadosRetorno.produtos_retorno && dadosRetorno.produtos_retorno.length > 0) {
-        try {
-          for (const produtoRetorno of dadosRetorno.produtos_retorno) {
-            const { error: itemError } = await supabase
-              .from('consignacao_itens')
-              .update({
-                quantidade_retornada: produtoRetorno.quantidade_retornada,
-                quantidade_vendida: produtoRetorno.quantidade_vendida,
-                valor_total_vendido: produtoRetorno.quantidade_vendida * produtoRetorno.valor_unitario,
-                updated_at: new Date().toISOString()
-              })
-              .eq('consignacao_id', id)
-              .eq('produto_id', produtoRetorno.produto_id);
-
-            if (itemError) {
-              console.warn('⚠️ Erro ao atualizar item detalhado:', itemError);
-              // Continua sem falhar
-            }
-          }
-          console.log('✅ Itens detalhados atualizados');
-        } catch (error) {
-          console.warn('⚠️ Não foi possível atualizar itens detalhados:', error);
-          // Continua sem falhar
-        }
-      }
-
-      // 2. Atualizar consignação principal
-      const updates = {
-        status: 'Finalizada',
-        data_finalizacao: new Date().toISOString().split('T')[0],
-        valor_retornado: dadosRetorno.valor_retornado || 0,
-        valor_vendido: dadosRetorno.valor_vendido || 0,
-        produtos_retorno: JSON.stringify(dadosRetorno.produtos_retorno || []),
-        observacoes_retorno: dadosRetorno.observacoes || '',
-        updated_at: new Date().toISOString()
+      console.log('🏁 Finalizando consignação ID:', id);
+      console.log('📊 Dados do retorno:', dadosRetorno);
+      
+      if (!id) throw new Error('ID da consignação é obrigatório');
+      
+      // Preparar o objeto JSON para a coluna retorno
+      const retornoJson = {
+        quantidadeRetornada: parseInt(dadosRetorno.quantidadeRetornada) || 0,
+        quantidadeVendida: parseInt(dadosRetorno.quantidadeVendida) || 0,
+        valorRetornado: parseFloat(dadosRetorno.valorRetornado) || 0,
+        valorDevido: parseFloat(dadosRetorno.valorDevido) || 0,
+        observacoes: dadosRetorno.observacoes || '',
+        dataFinalizacao: new Date().toISOString()
       };
+
+      const updates = {
+        status: 'finalizada',
+        data_retorno: new Date().toISOString().split('T')[0],
+        retorno: retornoJson
+      };
+
+      console.log('📤 Updates para envio:', JSON.stringify(updates, null, 2));
 
       const { data, error: err } = await supabase
         .from('consignacoes')
         .update(updates)
         .eq('id', id)
-        .select();
+        .select(`
+          *,
+          vendedores (
+            id,
+            nome,
+            email
+          )
+        `);
 
-      if (err) {
-        console.error('❌ Erro ao finalizar consignação:', err);
-        throw err;
-      }
+      if (err) throw err;
       
       console.log('✅ Consignação finalizada:', data);
       await fetchConsignacoes();
       return { success: true, data: data || [] };
-      
     } catch (err: any) {
-      console.error('❌ Erro ao finalizar consignação:', err);
-      const mensagemErro = err?.message || 'Erro ao finalizar consignação';
-      setError(mensagemErro);
-      return { success: false, error: mensagemErro };
+      return tratarErro(err, 'finalizar consignação');
     }
   };
 
@@ -575,19 +599,8 @@ export const useSupabase = () => {
     try {
       console.log('🗑️ Excluindo consignação:', id);
       
-      // Tentar excluir itens primeiro (se a tabela existir)
-      try {
-        await supabase
-          .from('consignacao_itens')
-          .delete()
-          .eq('consignacao_id', id);
-        console.log('✅ Itens da consignação excluídos');
-      } catch (error) {
-        console.warn('⚠️ Não foi possível excluir itens (tabela pode não existir):', error);
-        // Continua sem falhar
-      }
+      if (!id) throw new Error('ID da consignação é obrigatório');
       
-      // Excluir consignação principal
       const { error: err } = await supabase
         .from('consignacoes')
         .delete()
@@ -599,72 +612,8 @@ export const useSupabase = () => {
       await fetchConsignacoes();
       return { success: true };
     } catch (err: any) {
-      console.error('❌ Erro ao excluir consignação:', err);
-      setError(err?.message || 'Erro ao excluir consignação');
-      return { success: false, error: err?.message || 'Erro desconhecido' };
+      return tratarErro(err, 'excluir consignação');
     }
-  };
-
-  // ========================================
-  // NOVA FUNÇÃO: BUSCAR ITENS DA CONSIGNAÇÃO
-  // ========================================
-  const buscarItensConsignacao = async (consignacaoId: number) => {
-    try {
-      console.log('🔍 Buscando itens da consignação:', consignacaoId);
-      
-      const { data, error } = await supabase
-        .from('consignacao_itens')
-        .select(`
-          *,
-          produtos (
-            id,
-            nome,
-            descricao,
-            codigo_barras,
-            categoria,
-            valor_venda
-          )
-        `)
-        .eq('consignacao_id', consignacaoId)
-        .order('id');
-
-      if (error) {
-        // Se a tabela não existir, não é um erro crítico
-        if (error.code === '42P01') { // relation does not exist
-          console.log('ℹ️ Tabela consignacao_itens não existe ainda');
-          return { success: true, data: [] };
-        }
-        throw error;
-      }
-
-      console.log('✅ Itens encontrados:', data?.length || 0);
-      return { success: true, data: data || [] };
-      
-    } catch (err: any) {
-      console.error('❌ Erro ao buscar itens:', err);
-      return { success: false, error: err?.message || 'Erro ao buscar itens' };
-    }
-  };
-
-  // ========================================
-  // FUNÇÃO PARA VALIDAR QUANTIDADE DE RETORNO
-  // ========================================
-  const validarQuantidadeRetorno = (
-    quantidadeDeixada: number, 
-    quantidadeRetornada: number
-  ): { valido: boolean; erro?: string } => {
-    if (quantidadeRetornada < 0) {
-      return { valido: false, erro: 'Quantidade não pode ser negativa' };
-    }
-    
-    if (quantidadeRetornada > quantidadeDeixada) {
-      return { 
-        valido: false, 
-        erro: `Quantidade de retorno (${quantidadeRetornada}) não pode ser maior que a deixada (${quantidadeDeixada})` 
-      };
-    }
-    
-    return { valido: true };
   };
 
   // ========================================
@@ -672,46 +621,71 @@ export const useSupabase = () => {
   // ========================================
   const refetch = async () => {
     console.log('🔄 Recarregando todos os dados...');
-    await Promise.all([
-      fetchVendedores(),
-      fetchProdutos(),
-      fetchCategorias(),
-      fetchConsignacoes()
-    ]);
-    console.log('✅ Dados recarregados');
+    setError(null); // Limpar erros anteriores
+    
+    try {
+      await Promise.all([
+        fetchVendedores(),
+        fetchProdutos(),
+        fetchCategorias(),
+        fetchConsignacoes()
+      ]);
+      console.log('✅ Todos os dados recarregados com sucesso');
+    } catch (error: any) {
+      console.error('❌ Erro ao recarregar dados:', error);
+      tratarErro(error, 'recarregar dados');
+    }
   };
 
   // ========================================
-  // FUNÇÃO PARA OBTER ESTATÍSTICAS
+  // TESTE DE CONEXÃO
   // ========================================
-  const obterEstatisticas = () => {
-    const estatisticas = {
-      vendedores: {
-        total: vendedores.length,
-        ativos: vendedores.filter(v => String(v.status).toLowerCase() === 'ativo').length
-      },
-      produtos: {
-        total: produtos.length,
-        ativos: produtos.filter(p => p.ativo).length,
-        categorias: [...new Set(produtos.map(p => p.categoria))].length
-      },
-      consignacoes: {
-        total: consignacoes.length,
-        abertas: consignacoes.filter(c => c.status === 'Aberta').length,
-        finalizadas: consignacoes.filter(c => c.status === 'Finalizada').length,
-        valorTotal: consignacoes.reduce((total, c) => total + (c.valor_total || 0), 0),
-        valorVendido: consignacoes.reduce((total, c) => total + (c.valor_vendido || 0), 0)
+  const testarConexao = async () => {
+    try {
+      console.log('🔍 Testando conexão com Supabase...');
+      
+      const { data, error } = await supabase
+        .from('vendedores')
+        .select('count')
+        .limit(1);
+      
+      if (error) throw error;
+      
+      console.log('✅ Conexão OK!');
+      return true;
+    } catch (err: any) {
+      console.error('❌ Falha na conexão:', err);
+      tratarErro(err, 'testar conexão');
+      return false;
+    }
+  };
+
+  // ========================================
+  // INICIALIZAÇÃO AUTOMÁTICA
+  // ========================================
+  useEffect(() => {
+    const inicializar = async () => {
+      console.log('🚀 Inicializando useSupabase...');
+      
+      // Testar conexão primeiro
+      const conexaoOk = await testarConexao();
+      
+      if (conexaoOk) {
+        // Carregar todos os dados
+        await refetch();
+      } else {
+        console.error('❌ Falha na inicialização - problemas de conexão');
       }
     };
-
-    return estatisticas;
-  };
+    
+    inicializar();
+  }, []);
 
   // ========================================
   // RETORNO DO HOOK
   // ========================================
   return {
-    // Dados
+    // Estados
     vendedores,
     produtos,
     categorias,
@@ -723,30 +697,32 @@ export const useSupabase = () => {
     fazerLogin,
     
     // CRUD Vendedores
+    fetchVendedores,
     adicionarVendedor,
     atualizarVendedor,
     excluirVendedor,
     
     // CRUD Produtos
+    fetchProdutos,
     adicionarProduto,
     atualizarProduto,
     excluirProduto,
-    buscarProdutoPorCodigo, // ← NOVA
     
     // CRUD Categorias
+    fetchCategorias,
     adicionarCategoria,
     atualizarCategoria,
     excluirCategoria,
     
-    // CRUD Consignações (MELHORADAS)
+    // CRUD Consignações
+    fetchConsignacoes,
     adicionarConsignacao,
     finalizarConsignacao,
     excluirConsignacao,
-    buscarItensConsignacao, // ← NOVA
     
-    // Funções Auxiliares
-    validarQuantidadeRetorno, // ← NOVA
-    obterEstatisticas, // ← NOVA
-    refetch
+    // Utilitários
+    refetch,
+    testarConexao,
+    clearError: () => setError(null)
   };
 };
