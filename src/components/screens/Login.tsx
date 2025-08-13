@@ -103,7 +103,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
 
-          {/* Credenciais de teste */}
+          {/* Credenciais de teste 
           <div className={`p-3 rounded-md bg-blue-50 border border-blue-200`}>
             <div className="flex items-start">
               <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
@@ -113,7 +113,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 <p><strong>Vendedor:</strong> login: vendedor, senha: 123</p>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Botão de Login */}
           <button
