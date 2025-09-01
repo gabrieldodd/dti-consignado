@@ -1,4 +1,4 @@
-// src/components/screens/TelaVendedores.tsx
+// src/components/screens/TelaVendedores.tsx - Versão Corrigida Completa
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Edit, Trash2, Users, Eye, EyeOff, CheckCircle, X } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
@@ -29,7 +29,7 @@ export const TelaVendedores: React.FC = () => {
     login: '',
     senha: '',
     confirmarSenha: '',
-    status: 'ativo'
+    status: 'Ativo' // CORREÇÃO: Status com primeira letra maiúscula
   });
 
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -67,42 +67,70 @@ export const TelaVendedores: React.FC = () => {
 
     if (!formData.nome.trim()) {
       novosErros.nome = 'Nome é obrigatório';
+    } else if (formData.nome.trim().length < 2) {
+      novosErros.nome = 'Nome deve ter pelo menos 2 caracteres';
     }
 
     if (!formData.email.trim()) {
       novosErros.email = 'Email é obrigatório';
-    } else if (!validarEmail(formData.email)) {
+    } else if (validarEmail && !validarEmail(formData.email)) {
       novosErros.email = 'Email inválido';
-    }
-
-    if (!formData.telefone.trim()) {
-      novosErros.telefone = 'Telefone é obrigatório';
     }
 
     if (!formData.login.trim()) {
       novosErros.login = 'Login é obrigatório';
-    } else if (formData.login.length < 3) {
+    } else if (formData.login.trim().length < 3) {
       novosErros.login = 'Login deve ter pelo menos 3 caracteres';
     }
 
-    // Verificar se login já existe (apenas para novos vendedores)
-    if (!vendedorEditando) {
-      const loginExiste = vendedores.some((v: any) => v.login === formData.login);
+    // Verificar duplicação de email e login
+    if (vendedorEditando) {
+      // Se está editando, verifica se email/login mudaram e se não há duplicação
+      if (formData.email.trim() !== vendedorEditando.email) {
+        const emailExiste = vendedores.some((v: any) => 
+          v.email.toLowerCase() === formData.email.trim().toLowerCase() && 
+          v.id !== vendedorEditando.id
+        );
+        if (emailExiste) {
+          novosErros.email = 'Este email já está em uso';
+        }
+      }
+
+      if (formData.login.trim() !== vendedorEditando.login) {
+        const loginExiste = vendedores.some((v: any) => 
+          v.login.toLowerCase() === formData.login.trim().toLowerCase() && 
+          v.id !== vendedorEditando.id
+        );
+        if (loginExiste) {
+          novosErros.login = 'Este login já está em uso';
+        }
+      }
+    } else {
+      // Se é novo vendedor, verifica duplicação
+      const emailExiste = vendedores.some((v: any) => 
+        v.email.toLowerCase() === formData.email.trim().toLowerCase()
+      );
+      if (emailExiste) {
+        novosErros.email = 'Este email já está em uso';
+      }
+
+      const loginExiste = vendedores.some((v: any) => 
+        v.login.toLowerCase() === formData.login.trim().toLowerCase()
+      );
       if (loginExiste) {
-        novosErros.login = 'Login já está em uso';
+        novosErros.login = 'Este login já está em uso';
       }
     }
 
-    if (!vendedorEditando || formData.senha) {
-      if (!formData.senha) {
-        novosErros.senha = 'Senha é obrigatória';
-      } else if (formData.senha.length < 3) {
-        novosErros.senha = 'Senha deve ter pelo menos 3 caracteres';
-      }
+    // Validação de senha
+    if (!vendedorEditando && !formData.senha.trim()) {
+      novosErros.senha = 'Senha é obrigatória para novos vendedores';
+    } else if (formData.senha && formData.senha.length < 6) {
+      novosErros.senha = 'Senha deve ter pelo menos 6 caracteres';
+    }
 
-      if (formData.senha !== formData.confirmarSenha) {
-        novosErros.confirmarSenha = 'Senhas não conferem';
-      }
+    if (formData.senha && formData.senha !== formData.confirmarSenha) {
+      novosErros.confirmarSenha = 'Senhas não coincidem';
     }
 
     setErros(novosErros);
@@ -118,7 +146,7 @@ export const TelaVendedores: React.FC = () => {
       login: '',
       senha: '',
       confirmarSenha: '',
-      status: 'ativo'
+      status: 'Ativo' // CORREÇÃO: Status com primeira letra maiúscula
     });
     setVendedorEditando(null);
     setErros({});
@@ -135,7 +163,7 @@ export const TelaVendedores: React.FC = () => {
       login: vendedor.login || '',
       senha: '',
       confirmarSenha: '',
-      status: vendedor.status || 'ativo'
+      status: vendedor.status || 'Ativo' // CORREÇÃO: Garantir status com primeira letra maiúscula
     });
     setVendedorEditando(vendedor);
     setErros({});
@@ -154,7 +182,7 @@ export const TelaVendedores: React.FC = () => {
       login: '',
       senha: '',
       confirmarSenha: '',
-      status: 'ativo'
+      status: 'Ativo' // CORREÇÃO: Status com primeira letra maiúscula
     });
     setErros({});
     setMostrarSenha(false);
@@ -171,8 +199,8 @@ export const TelaVendedores: React.FC = () => {
         email: formData.email.trim().toLowerCase(),
         telefone: formData.telefone.trim(),
         login: formData.login.trim(),
-        status: formData.status,
-        data_cadastro: new Date().toISOString()
+        status: formData.status, // CORREÇÃO: Mantém status como está (primeira letra maiúscula)
+        data_cadastro: vendedorEditando?.data_cadastro || vendedorEditando?.dataCadastro || new Date().toISOString()
       };
 
       // Incluir senha apenas se fornecida
@@ -182,7 +210,11 @@ export const TelaVendedores: React.FC = () => {
 
       let resultado;
       if (vendedorEditando) {
-        resultado = await atualizarVendedor(vendedorEditando.id, dadosVendedor);
+        // CORREÇÃO: Preservar ID na atualização
+        resultado = await atualizarVendedor(vendedorEditando.id, {
+          ...dadosVendedor,
+          id: vendedorEditando.id
+        });
       } else {
         resultado = await adicionarVendedor(dadosVendedor);
       }
@@ -196,6 +228,7 @@ export const TelaVendedores: React.FC = () => {
         mostrarMensagem('error', resultado.error || 'Erro ao salvar vendedor');
       }
     } catch (error) {
+      console.error('Erro ao salvar vendedor:', error);
       mostrarMensagem('error', 'Erro inesperado ao salvar vendedor');
     } finally {
       setCarregando(false);
@@ -220,15 +253,19 @@ export const TelaVendedores: React.FC = () => {
     }
   };
 
-  // Alternar status ativo/inativo
+  // CORREÇÃO: Alternar status ativo/inativo com primeira letra maiúscula
   const alternarStatus = async (vendedor: any) => {
-    const novoStatus = vendedor.status === 'ativo' ? 'inativo' : 'ativo';
+    // CORREÇÃO: Status com primeira letra maiúscula
+    const novoStatus = vendedor.status === 'Ativo' ? 'Inativo' : 'Ativo';
     
     try {
-      const resultado = await atualizarVendedor(vendedor.id, { status: novoStatus });
+      const resultado = await atualizarVendedor(vendedor.id, { 
+        ...vendedor,
+        status: novoStatus // CORREÇÃO: Garantir status com primeira letra maiúscula
+      });
       if (resultado.success) {
         mostrarMensagem('success', 
-          `Vendedor ${novoStatus === 'ativo' ? 'ativado' : 'desativado'} com sucesso!`
+          `Vendedor ${novoStatus === 'Ativo' ? 'ativado' : 'desativado'} com sucesso!`
         );
       } else {
         mostrarMensagem('error', resultado.error || 'Erro ao alterar status');
@@ -295,8 +332,8 @@ export const TelaVendedores: React.FC = () => {
               `}
             >
               <option value="todos">Todos os Status</option>
-              <option value="ativo">Ativos</option>
-              <option value="inativo">Inativos</option>
+              <option value="Ativo">Ativos</option> {/* CORREÇÃO: Primeira letra maiúscula */}
+              <option value="Inativo">Inativos</option> {/* CORREÇÃO: Primeira letra maiúscula */}
             </select>
 
             {/* Ordenação */}
@@ -332,7 +369,7 @@ export const TelaVendedores: React.FC = () => {
                     {vendedor.telefone}
                   </p>
                 </div>
-                
+        
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => abrirModalEdicao(vendedor)}
@@ -377,14 +414,14 @@ export const TelaVendedores: React.FC = () => {
                   onClick={() => alternarStatus(vendedor)}
                   className={`
                     px-3 py-1 rounded-full text-sm font-medium flex items-center space-x-1
-                    ${vendedor.status === 'ativo' 
+                    ${vendedor.status === 'Ativo'  // CORREÇÃO: Verificar status com primeira letra maiúscula
                       ? 'bg-green-100 text-green-800 hover:bg-green-200' 
                       : 'bg-red-100 text-red-800 hover:bg-red-200'
                     } transition-colors
                   `}
                 >
-                  {vendedor.status === 'ativo' ? <CheckCircle size={14} /> : <X size={14} />}
-                  <span className="capitalize">{vendedor.status}</span>
+                  {vendedor.status === 'Ativo' ? <CheckCircle size={14} /> : <X size={14} />}
+                  <span>{vendedor.status}</span> {/* CORREÇÃO: Exibir status como está no banco */}
                 </button>
               </div>
             </div>
@@ -399,8 +436,9 @@ export const TelaVendedores: React.FC = () => {
             </h3>
             <p className={tema.textSecondary}>
               {busca || filtroStatus !== 'todos' 
-                ? 'Tente ajustar os filtros de busca' 
-                : 'Crie seu primeiro vendedor para começar'}
+                ? 'Tente ajustar os filtros' 
+                : 'Crie seu primeiro vendedor para começar'
+              }
             </p>
           </div>
         )}
@@ -409,7 +447,7 @@ export const TelaVendedores: React.FC = () => {
       {/* Modal */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
+          <div className={`${tema.surface} rounded-lg shadow-xl w-full max-w-md`}>
             <div className="p-6">
               <h2 className={`text-xl font-bold ${tema.text} mb-6`}>
                 {vendedorEditando ? 'Editar Vendedor' : 'Novo Vendedor'}
@@ -419,7 +457,7 @@ export const TelaVendedores: React.FC = () => {
                 {/* Nome */}
                 <div>
                   <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                    Nome *
+                    Nome Completo *
                   </label>
                   <input
                     type="text"
@@ -429,132 +467,117 @@ export const TelaVendedores: React.FC = () => {
                       w-full px-3 py-2 border rounded-lg
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       ${erros.nome ? 'border-red-500' : tema.border}
+                      ${tema.surface} ${tema.text}
                     `}
-                    placeholder="Digite o nome completo"
+                    placeholder="Nome completo do vendedor"
                   />
                   {erros.nome && (
                     <p className="text-red-500 text-sm mt-1">{erros.nome}</p>
                   )}
                 </div>
 
-                {/* Email e Telefone */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className={`
-                        w-full px-3 py-2 border rounded-lg
-                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                        ${erros.email ? 'border-red-500' : tema.border}
-                      `}
-                      placeholder="email@exemplo.com"
-                    />
-                    {erros.email && (
-                      <p className="text-red-500 text-sm mt-1">{erros.email}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Telefone *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.telefone}
-                      onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                      className={`
-                        w-full px-3 py-2 border rounded-lg
-                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                        ${erros.telefone ? 'border-red-500' : tema.border}
-                      `}
-                      placeholder="(11) 99999-9999"
-                    />
-                    {erros.telefone && (
-                      <p className="text-red-500 text-sm mt-1">{erros.telefone}</p>
-                    )}
-                  </div>
+                {/* Email */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${erros.email ? 'border-red-500' : tema.border}
+                      ${tema.surface} ${tema.text}
+                    `}
+                    placeholder="email@exemplo.com"
+                  />
+                  {erros.email && (
+                    <p className="text-red-500 text-sm mt-1">{erros.email}</p>
+                  )}
                 </div>
 
-                {/* Login e Status */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Login *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.login}
-                      onChange={(e) => setFormData({ ...formData, login: e.target.value })}
-                      className={`
-                        w-full px-3 py-2 border rounded-lg
-                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                        ${erros.login ? 'border-red-500' : tema.border}
-                      `}
-                      placeholder="usuario123"
-                      disabled={vendedorEditando !== null}
-                    />
-                    {erros.login && (
-                      <p className="text-red-500 text-sm mt-1">{erros.login}</p>
-                    )}
-                  </div>
+                {/* Telefone */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Telefone
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.telefone}
+                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${tema.border} ${tema.surface} ${tema.text}
+                    `}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Status
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    >
-                      <option value="ativo">Ativo</option>
-                      <option value="inativo">Inativo</option>
-                    </select>
-                  </div>
+                {/* Login */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Login *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.login}
+                    onChange={(e) => setFormData({ ...formData, login: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${erros.login ? 'border-red-500' : tema.border}
+                      ${tema.surface} ${tema.text}
+                    `}
+                    placeholder="Login para acesso ao sistema"
+                  />
+                  {erros.login && (
+                    <p className="text-red-500 text-sm mt-1">{erros.login}</p>
+                  )}
                 </div>
 
                 {/* Senha */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Senha {!vendedorEditando && '*'}
-                      {vendedorEditando && (
-                        <span className="text-xs text-gray-500 ml-1">(deixe vazio para manter atual)</span>
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    {vendedorEditando ? 'Nova Senha (deixe vazio para manter)' : 'Senha *'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={mostrarSenha ? 'text' : 'password'}
+                      value={formData.senha}
+                      onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 pr-10 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.senha ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
+                      `}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMostrarSenha(!mostrarSenha)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      {mostrarSenha ? (
+                        <EyeOff className={`h-4 w-4 ${tema.textSecondary}`} />
+                      ) : (
+                        <Eye className={`h-4 w-4 ${tema.textSecondary}`} />
                       )}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={mostrarSenha ? 'text' : 'password'}
-                        value={formData.senha}
-                        onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
-                        className={`
-                          w-full px-3 py-2 pr-10 border rounded-lg
-                          focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                          ${erros.senha ? 'border-red-500' : tema.border}
-                        `}
-                        placeholder="Digite a senha"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setMostrarSenha(!mostrarSenha)}
-                        className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${tema.textSecondary}`}
-                      >
-                        {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                    {erros.senha && (
-                      <p className="text-red-500 text-sm mt-1">{erros.senha}</p>
-                    )}
+                    </button>
                   </div>
+                  {erros.senha && (
+                    <p className="text-red-500 text-sm mt-1">{erros.senha}</p>
+                  )}
+                </div>
 
+                {/* Confirmar Senha */}
+                {formData.senha && (
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                      Confirmar Senha {!vendedorEditando && '*'}
+                      Confirmar Senha *
                     </label>
                     <input
                       type={mostrarSenha ? 'text' : 'password'}
@@ -564,25 +587,41 @@ export const TelaVendedores: React.FC = () => {
                         w-full px-3 py-2 border rounded-lg
                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
                         ${erros.confirmarSenha ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
                       `}
-                      placeholder="Confirme a senha"
+                      placeholder="Digite a senha novamente"
                     />
                     {erros.confirmarSenha && (
                       <p className="text-red-500 text-sm mt-1">{erros.confirmarSenha}</p>
                     )}
                   </div>
+                )}
+
+                {/* Status */}
+                <div>
+                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                    Status
+                  </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className={`
+                      w-full px-3 py-2 border rounded-lg
+                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      ${tema.border} ${tema.surface} ${tema.text}
+                    `}
+                  >
+                    <option value="Ativo">Ativo</option> {/* CORREÇÃO: Primeira letra maiúscula */}
+                    <option value="Inativo">Inativo</option> {/* CORREÇÃO: Primeira letra maiúscula */}
+                  </select>
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 mt-8">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={fecharModal}
+                  className={`px-4 py-2 ${tema.text} border ${tema.border} rounded-md ${tema.hover}`}
                   disabled={carregando}
-                  className={`
-                    px-4 py-2 border ${tema.border} rounded-lg
-                    ${tema.text} hover:${tema.hover} transition-colors
-                    disabled:opacity-50
-                  `}
                 >
                   Cancelar
                 </button>
@@ -590,12 +629,17 @@ export const TelaVendedores: React.FC = () => {
                   onClick={salvarVendedor}
                   disabled={carregando}
                   className={`
-                    ${tema.primary} text-white px-4 py-2 rounded-lg
-                    hover:opacity-90 transition-opacity
-                    disabled:opacity-50
+                    px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-colors
                   `}
                 >
-                  {carregando ? 'Salvando...' : 'Salvar'}
+                  {carregando 
+                    ? 'Salvando...' 
+                    : vendedorEditando 
+                      ? 'Atualizar' 
+                      : 'Criar'
+                  }
                 </button>
               </div>
             </div>

@@ -409,44 +409,58 @@ export const useSupabase = () => {
     }
   };
 
-  const atualizarCategoria = async (id: any, updates: any) => {
-    try {
-      console.log('✏️ Atualizando categoria:', id, updates);
-      
-      if (!id) throw new Error('ID da categoria é obrigatório');
-      
-      // Preparar dados para atualização
-      const dadosFormatados = {
-        nome: updates.nome ? String(updates.nome).trim() : undefined,
-        descricao: updates.descricao ? String(updates.descricao).trim() : undefined,
-        cor: updates.cor || undefined,
-        ativa: updates.ativa !== undefined ? updates.ativa : undefined
-      };
-
-      // Remover propriedades undefined
-      const dadosLimpos = Object.fromEntries(
-        Object.entries(dadosFormatados).filter(([_, value]) => value !== undefined)
-      );
-
-      if (Object.keys(dadosLimpos).length === 0) {
-        throw new Error('Nenhum dado válido para atualizar');
-      }
-
-      const { data, error: err } = await supabase
-        .from('categorias')
-        .update(dadosLimpos)
-        .eq('id', id)
-        .select();
-
-      if (err) throw err;
-      
-      console.log('✅ Categoria atualizada:', data);
-      await fetchCategorias();
-      return { success: true, data: data || [] };
-    } catch (err: any) {
-      return tratarErro(err, 'atualizar categoria');
+  const atualizarCategoria = async (id: number, dados: any) => {
+  try {
+    // Verificar se existe primeiro
+    const { data: existe } = await supabase
+      .from('categorias')
+      .select('nome')
+      .eq('id', id)
+      .single();
+    
+    if (!existe) {
+      return { success: false, error: 'Categoria não encontrada' };
     }
-  };
+    
+    // Verificar duplicação de nome (se mudou)
+    if (dados.nome && dados.nome !== existe.nome) {
+      const { data: duplicata } = await supabase
+        .from('categorias')
+        .select('id')
+        .eq('nome', dados.nome.trim())
+        .neq('id', id)
+        .maybeSingle();
+        
+      if (duplicata) {
+        return { success: false, error: 'Nome já existe' };
+      }
+    }
+    
+    // Atualizar apenas campos fornecidos
+    const { data, error } = await supabase
+      .from('categorias')
+      .update({
+        ...(dados.nome && { nome: dados.nome.trim() }),
+        ...(dados.descricao !== undefined && { descricao: dados.descricao.trim() }),
+        ...(dados.cor && { cor: dados.cor }),
+        ...(dados.ativa !== undefined && { ativa: dados.ativa })
+      })
+      .eq('id', id)
+      .select()
+      .single();
+      
+    if (error) {
+      console.error('Erro Supabase:', error);
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true, data };
+    
+  } catch (error) {
+    console.error('Erro geral:', error);
+    return { success: false, error: 'Erro inesperado' };
+  }
+};
 
   const excluirCategoria = async (id: any) => {
     try {

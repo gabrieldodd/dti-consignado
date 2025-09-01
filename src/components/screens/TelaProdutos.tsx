@@ -1,4 +1,4 @@
-// src/components/screens/TelaProdutos.tsx
+// src/components/screens/TelaProdutos.tsx - Versão Corrigida Completa
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Edit, Trash2, Package, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
@@ -82,6 +82,8 @@ export const TelaProdutos: React.FC = () => {
 
     if (!formData.nome.trim()) {
       novosErros.nome = 'Nome é obrigatório';
+    } else if (formData.nome.trim().length < 2) {
+      novosErros.nome = 'Nome deve ter pelo menos 2 caracteres';
     }
 
     if (!formData.categoria) {
@@ -98,6 +100,30 @@ export const TelaProdutos: React.FC = () => {
 
     if (!formData.estoqueMinimo || parseInt(formData.estoqueMinimo) < 0) {
       novosErros.estoqueMinimo = 'Estoque mínimo deve ser um número válido';
+    }
+
+    // Verificar duplicação de código de barras
+    if (formData.codigoBarras.trim()) {
+      if (produtoEditando) {
+        // Se está editando, verifica se o código mudou e se não há duplicação
+        if (formData.codigoBarras.trim() !== (produtoEditando.codigo_barras || produtoEditando.codigoBarras)) {
+          const codigoExiste = produtos.some((p: any) => 
+            (p.codigo_barras || p.codigoBarras) === formData.codigoBarras.trim() && 
+            p.id !== produtoEditando.id
+          );
+          if (codigoExiste) {
+            novosErros.codigoBarras = 'Este código de barras já está em uso';
+          }
+        }
+      } else {
+        // Se é novo produto, verifica duplicação
+        const codigoExiste = produtos.some((p: any) => 
+          (p.codigo_barras || p.codigoBarras) === formData.codigoBarras.trim()
+        );
+        if (codigoExiste) {
+          novosErros.codigoBarras = 'Este código de barras já está em uso';
+        }
+      }
     }
 
     setErros(novosErros);
@@ -170,13 +196,17 @@ export const TelaProdutos: React.FC = () => {
         valor_venda: parseFloat(formData.valorVenda),
         estoque: parseInt(formData.estoque),
         estoque_minimo: parseInt(formData.estoqueMinimo),
-        ativo: true,
-        data_cadastro: new Date().toISOString()
+        ativo: true, // CORREÇÃO: Sempre boolean, não string
+        data_cadastro: produtoEditando?.data_cadastro || produtoEditando?.dataCadastro || new Date().toISOString()
       };
 
       let resultado;
       if (produtoEditando) {
-        resultado = await atualizarProduto(produtoEditando.id, dadosProduto);
+        // CORREÇÃO: Preservar ID na atualização
+        resultado = await atualizarProduto(produtoEditando.id, {
+          ...dadosProduto,
+          id: produtoEditando.id
+        });
       } else {
         resultado = await adicionarProduto(dadosProduto);
       }
@@ -190,6 +220,7 @@ export const TelaProdutos: React.FC = () => {
         mostrarMensagem('error', resultado.error || 'Erro ao salvar produto');
       }
     } catch (error) {
+      console.error('Erro ao salvar produto:', error);
       mostrarMensagem('error', 'Erro inesperado ao salvar produto');
     } finally {
       setCarregando(false);
@@ -214,10 +245,13 @@ export const TelaProdutos: React.FC = () => {
     }
   };
 
-  // Alternar status ativo/inativo
+  // CORREÇÃO: Alternar status ativo/inativo com boolean
   const alternarStatus = async (produto: any) => {
     try {
-      const resultado = await atualizarProduto(produto.id, { ativo: !produto.ativo });
+      const resultado = await atualizarProduto(produto.id, { 
+        ...produto,
+        ativo: !produto.ativo // CORREÇÃO: Usar boolean em vez de string
+      });
       if (resultado.success) {
         mostrarMensagem('success', 
           `Produto ${produto.ativo ? 'desativado' : 'ativado'} com sucesso!`
@@ -340,19 +374,21 @@ export const TelaProdutos: React.FC = () => {
             <div key={produto.id} className={`${tema.surface} rounded-lg shadow-sm p-6`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <h3 className={`font-semibold ${tema.text} mb-1`}>
+                  <h3 className={`font-semibold ${tema.text} mb-2`}>
                     {produto.nome}
                   </h3>
                   <p className={`text-sm ${tema.textSecondary} mb-2`}>
-                    {produto.categoria}
+                    {produto.descricao || 'Sem descrição'}
                   </p>
-                  {produto.descricao && (
-                    <p className={`text-sm ${tema.textSecondary} mb-2`}>
-                      {produto.descricao}
-                    </p>
-                  )}
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                    produto.categoria 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {produto.categoria || 'Sem categoria'}
+                  </span>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => abrirModalEdicao(produto)}
@@ -374,7 +410,8 @@ export const TelaProdutos: React.FC = () => {
                 <div className="flex justify-between">
                   <span className={tema.textSecondary}>Valor de Venda:</span>
                   <span className={`font-medium ${tema.text}`}>
-                    {formatarMoeda(produto.valor_venda || produto.valorVenda || 0)}
+                    {formatarMoeda ? formatarMoeda(produto.valor_venda || produto.valorVenda || 0) : 
+                      `R$ ${(produto.valor_venda || produto.valorVenda || 0).toFixed(2)}`}
                   </span>
                 </div>
 
@@ -450,44 +487,50 @@ export const TelaProdutos: React.FC = () => {
                 {produtoEditando ? 'Editar Produto' : 'Novo Produto'}
               </h2>
 
-              <div className="space-y-4">
-                {/* Nome */}
-                <div>
-                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className={`
-                      w-full px-3 py-2 border rounded-lg
-                      focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                      ${erros.nome ? 'border-red-500' : tema.border}
-                    `}
-                    placeholder="Digite o nome do produto"
-                  />
-                  {erros.nome && (
-                    <p className="text-red-500 text-sm mt-1">{erros.nome}</p>
-                  )}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Coluna 1: Informações básicas */}
+                <div className="space-y-4">
+                  {/* Nome */}
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Nome *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nome}
+                      onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.nome ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
+                      `}
+                      placeholder="Nome do produto"
+                    />
+                    {erros.nome && (
+                      <p className="text-red-500 text-sm mt-1">{erros.nome}</p>
+                    )}
+                  </div>
 
-                {/* Descrição */}
-                <div>
-                  <label className={`block text-sm font-medium ${tema.text} mb-2`}>
-                    Descrição
-                  </label>
-                  <textarea
-                    value={formData.descricao}
-                    onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                    rows={3}
-                    className={`w-full px-3 py-2 border ${tema.border} rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    placeholder="Digite a descrição do produto"
-                  />
-                </div>
+                  {/* Descrição */}
+                  <div>
+                    <label className={`block text-sm font-medium ${tema.text} mb-2`}>
+                      Descrição
+                    </label>
+                    <textarea
+                      value={formData.descricao}
+                      onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                      rows={3}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg resize-none
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${tema.border} ${tema.surface} ${tema.text}
+                      `}
+                      placeholder="Descrição do produto"
+                    />
+                  </div>
 
-                {/* Código de Barras e Categoria */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Código de Barras */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Código de Barras
@@ -496,11 +539,20 @@ export const TelaProdutos: React.FC = () => {
                       type="text"
                       value={formData.codigoBarras}
                       onChange={(e) => setFormData({ ...formData, codigoBarras: e.target.value })}
-                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="Código de barras"
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${erros.codigoBarras ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
+                      `}
+                      placeholder="Código de barras do produto"
                     />
+                    {erros.codigoBarras && (
+                      <p className="text-red-500 text-sm mt-1">{erros.codigoBarras}</p>
+                    )}
                   </div>
 
+                  {/* Categoria */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Categoria *
@@ -512,6 +564,7 @@ export const TelaProdutos: React.FC = () => {
                         w-full px-3 py-2 border rounded-lg
                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
                         ${erros.categoria ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
                       `}
                     >
                       <option value="">Selecione uma categoria</option>
@@ -527,8 +580,9 @@ export const TelaProdutos: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Valores */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Coluna 2: Valores e estoque */}
+                <div className="space-y-4">
+                  {/* Valor de Custo */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Valor de Custo
@@ -539,11 +593,16 @@ export const TelaProdutos: React.FC = () => {
                       min="0"
                       value={formData.valorCusto}
                       onChange={(e) => setFormData({ ...formData, valorCusto: e.target.value })}
-                      className={`w-full px-3 py-2 border ${tema.border} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      className={`
+                        w-full px-3 py-2 border rounded-lg
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                        ${tema.border} ${tema.surface} ${tema.text}
+                      `}
                       placeholder="0,00"
                     />
                   </div>
 
+                  {/* Valor de Venda */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Valor de Venda *
@@ -558,6 +617,7 @@ export const TelaProdutos: React.FC = () => {
                         w-full px-3 py-2 border rounded-lg
                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
                         ${erros.valorVenda ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
                       `}
                       placeholder="0,00"
                     />
@@ -565,10 +625,8 @@ export const TelaProdutos: React.FC = () => {
                       <p className="text-red-500 text-sm mt-1">{erros.valorVenda}</p>
                     )}
                   </div>
-                </div>
 
-                {/* Estoque */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Estoque */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Estoque Atual *
@@ -582,6 +640,7 @@ export const TelaProdutos: React.FC = () => {
                         w-full px-3 py-2 border rounded-lg
                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
                         ${erros.estoque ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
                       `}
                       placeholder="0"
                     />
@@ -590,6 +649,7 @@ export const TelaProdutos: React.FC = () => {
                     )}
                   </div>
 
+                  {/* Estoque Mínimo */}
                   <div>
                     <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                       Estoque Mínimo *
@@ -603,6 +663,7 @@ export const TelaProdutos: React.FC = () => {
                         w-full px-3 py-2 border rounded-lg
                         focus:ring-2 focus:ring-blue-500 focus:border-transparent
                         ${erros.estoqueMinimo ? 'border-red-500' : tema.border}
+                        ${tema.surface} ${tema.text}
                       `}
                       placeholder="0"
                     />
@@ -610,18 +671,35 @@ export const TelaProdutos: React.FC = () => {
                       <p className="text-red-500 text-sm mt-1">{erros.estoqueMinimo}</p>
                     )}
                   </div>
+
+                  {/* Preview dos valores */}
+                  {formData.valorCusto && formData.valorVenda && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <h4 className="text-sm font-medium text-blue-900 mb-2">Resumo Financeiro:</h4>
+                      <div className="text-sm space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-blue-700">Margem:</span>
+                          <span className="font-medium text-blue-900">
+                            {((parseFloat(formData.valorVenda) - parseFloat(formData.valorCusto)) / parseFloat(formData.valorVenda) * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-blue-700">Lucro unitário:</span>
+                          <span className="font-medium text-blue-900">
+                            R$ {(parseFloat(formData.valorVenda) - parseFloat(formData.valorCusto)).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 mt-8">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={fecharModal}
+                  className={`px-4 py-2 ${tema.text} border ${tema.border} rounded-md ${tema.hover}`}
                   disabled={carregando}
-                  className={`
-                    px-4 py-2 border ${tema.border} rounded-lg
-                    ${tema.text} hover:${tema.hover} transition-colors
-                    disabled:opacity-50
-                  `}
                 >
                   Cancelar
                 </button>
@@ -629,12 +707,17 @@ export const TelaProdutos: React.FC = () => {
                   onClick={salvarProduto}
                   disabled={carregando}
                   className={`
-                    ${tema.primary} text-white px-4 py-2 rounded-lg
-                    hover:opacity-90 transition-opacity
-                    disabled:opacity-50
+                    px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-colors
                   `}
                 >
-                  {carregando ? 'Salvando...' : 'Salvar'}
+                  {carregando 
+                    ? 'Salvando...' 
+                    : produtoEditando 
+                      ? 'Atualizar' 
+                      : 'Criar'
+                  }
                 </button>
               </div>
             </div>

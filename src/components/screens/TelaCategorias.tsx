@@ -1,8 +1,7 @@
-// src/components/screens/TelaCategorias.tsx
+// src/components/screens/TelaCategorias.tsx - Versão Corrigida Completa
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Edit, Trash2, Tag, Palette } from 'lucide-react';
 import { useAppContext } from '../../contexts/AppContext';
-import { Categoria } from '../../types/Categoria';
 
 export const TelaCategorias: React.FC = () => {
   const { 
@@ -17,7 +16,7 @@ export const TelaCategorias: React.FC = () => {
   const [busca, setBusca] = useState('');
   const [ordenacao, setOrdenacao] = useState<'nome' | 'data'>('nome');
   const [modalAberto, setModalAberto] = useState(false);
-  const [categoriaEditando, setCategoriaEditando] = useState<Categoria | null>(null);
+  const [categoriaEditando, setCategoriaEditando] = useState<any>(null);
   const [carregando, setCarregando] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -27,6 +26,18 @@ export const TelaCategorias: React.FC = () => {
   });
 
   const [erros, setErros] = useState<Record<string, string>>({});
+
+  // Cores disponíveis para escolha
+  const coresDisponiveis = [
+    { nome: 'Azul', valor: '#3B82F6', classe: 'bg-blue-500' },
+    { nome: 'Verde', valor: '#10B981', classe: 'bg-green-500' },
+    { nome: 'Roxo', valor: '#8B5CF6', classe: 'bg-purple-500' },
+    { nome: 'Rosa', valor: '#EC4899', classe: 'bg-pink-500' },
+    { nome: 'Amarelo', valor: '#F59E0B', classe: 'bg-yellow-500' },
+    { nome: 'Vermelho', valor: '#EF4444', classe: 'bg-red-500' },
+    { nome: 'Índigo', valor: '#6366F1', classe: 'bg-indigo-500' },
+    { nome: 'Cinza', valor: '#6B7280', classe: 'bg-gray-500' }
+  ];
 
   // Categorias filtradas e ordenadas
   const categoriasOrdenadas = useMemo(() => {
@@ -45,20 +56,46 @@ export const TelaCategorias: React.FC = () => {
     });
   }, [categorias, busca, ordenacao]);
 
-  // Validação do formulário
+  // CORREÇÃO: Função de validação melhorada
   const validarFormulario = () => {
     const novosErros: Record<string, string> = {};
 
     if (!formData.nome.trim()) {
       novosErros.nome = 'Nome é obrigatório';
+    } else if (formData.nome.trim().length < 2) {
+      novosErros.nome = 'Nome deve ter pelo menos 2 caracteres';
     }
 
     if (!formData.descricao.trim()) {
       novosErros.descricao = 'Descrição é obrigatória';
+    } else if (formData.descricao.trim().length < 3) {
+      novosErros.descricao = 'Descrição deve ter pelo menos 3 caracteres';
     }
 
     if (!formData.cor) {
       novosErros.cor = 'Cor é obrigatória';
+    }
+
+    // CORREÇÃO: Verificar duplicação apenas para novas categorias ou se o nome mudou
+    if (categoriaEditando) {
+      // Se está editando, verifica se o nome mudou e se não há duplicação
+      if (formData.nome.trim() !== categoriaEditando.nome) {
+        const nomeExiste = categorias.some((c: any) => 
+          c.nome.toLowerCase() === formData.nome.trim().toLowerCase() && 
+          c.id !== categoriaEditando.id
+        );
+        if (nomeExiste) {
+          novosErros.nome = 'Já existe uma categoria com este nome';
+        }
+      }
+    } else {
+      // Se é nova categoria, verifica duplicação
+      const nomeExiste = categorias.some((c: any) => 
+        c.nome.toLowerCase() === formData.nome.trim().toLowerCase()
+      );
+      if (nomeExiste) {
+        novosErros.nome = 'Já existe uma categoria com este nome';
+      }
     }
 
     setErros(novosErros);
@@ -77,7 +114,7 @@ export const TelaCategorias: React.FC = () => {
     setModalAberto(true);
   };
 
-  // Abrir modal para editar categoria
+  // CORREÇÃO: Abrir modal para editar categoria
   const abrirModalEdicao = (categoria: any) => {
     setFormData({
       nome: categoria.nome || '',
@@ -101,7 +138,7 @@ export const TelaCategorias: React.FC = () => {
     setErros({});
   };
 
-  // Salvar categoria
+  // CORREÇÃO: Função salvarCategoria corrigida
   const salvarCategoria = async () => {
     if (!validarFormulario()) return;
 
@@ -112,12 +149,16 @@ export const TelaCategorias: React.FC = () => {
         descricao: formData.descricao.trim(),
         cor: formData.cor,
         ativa: true,
-        data_cadastro: new Date().toISOString()
+        data_cadastro: categoriaEditando?.data_cadastro || categoriaEditando?.dataCadastro || new Date().toISOString()
       };
 
       let resultado;
       if (categoriaEditando) {
-        resultado = await atualizarCategoria(categoriaEditando.id, dadosCategoria);
+        // CORREÇÃO: Garantir que o ID seja preservado na atualização
+        resultado = await atualizarCategoria(categoriaEditando.id, {
+          ...dadosCategoria,
+          id: categoriaEditando.id // Preserva o ID original
+        });
       } else {
         resultado = await adicionarCategoria(dadosCategoria);
       }
@@ -131,6 +172,7 @@ export const TelaCategorias: React.FC = () => {
         mostrarMensagem('error', resultado.error || 'Erro ao salvar categoria');
       }
     } catch (error) {
+      console.error('Erro ao salvar categoria:', error);
       mostrarMensagem('error', 'Erro inesperado ao salvar categoria');
     } finally {
       setCarregando(false);
@@ -309,6 +351,7 @@ export const TelaCategorias: React.FC = () => {
                       w-full px-3 py-2 border rounded-lg
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       ${erros.nome ? 'border-red-500' : tema.border}
+                      ${tema.surface} ${tema.text}
                     `}
                     placeholder="Digite o nome da categoria"
                   />
@@ -330,6 +373,7 @@ export const TelaCategorias: React.FC = () => {
                       w-full px-3 py-2 border rounded-lg resize-none
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       ${erros.descricao ? 'border-red-500' : tema.border}
+                      ${tema.surface} ${tema.text}
                     `}
                     placeholder="Digite a descrição da categoria"
                   />
@@ -343,40 +387,57 @@ export const TelaCategorias: React.FC = () => {
                   <label className={`block text-sm font-medium ${tema.text} mb-2`}>
                     Cor *
                   </label>
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="color"
-                      value={formData.cor}
-                      onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
-                      className="w-12 h-10 border rounded-lg cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={formData.cor}
-                      onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
-                      className={`
-                        flex-1 px-3 py-2 border rounded-lg
-                        focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                        ${erros.cor ? 'border-red-500' : tema.border}
-                      `}
-                      placeholder="#3B82F6"
-                    />
+                  <div className="grid grid-cols-4 gap-3">
+                    {coresDisponiveis.map((cor) => (
+                      <button
+                        key={cor.valor}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, cor: cor.valor })}
+                        className={`
+                          relative p-3 rounded-lg border-2 transition-all
+                          ${formData.cor === cor.valor 
+                            ? 'border-blue-500 ring-2 ring-blue-200' 
+                            : 'border-gray-200 hover:border-gray-300'
+                          }
+                        `}
+                      >
+                        <div 
+                          className={`w-full h-6 rounded ${cor.classe}`}
+                        />
+                        <span className="text-xs mt-1 block text-center">{cor.nome}</span>
+                        {formData.cor === cor.valor && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
                   </div>
                   {erros.cor && (
                     <p className="text-red-500 text-sm mt-1">{erros.cor}</p>
                   )}
                 </div>
+
+                {/* Preview da cor selecionada */}
+                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                  <div
+                    className="w-8 h-8 rounded-full border-2 border-white shadow"
+                    style={{ backgroundColor: formData.cor }}
+                  />
+                  <div>
+                    <p className="text-sm font-medium">Preview da categoria</p>
+                    <p className="text-xs text-gray-500">
+                      {formData.nome || 'Nome da categoria'} • {formData.descricao || 'Descrição'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end space-x-3 mt-8">
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   onClick={fecharModal}
+                  className={`px-4 py-2 ${tema.text} border ${tema.border} rounded-md ${tema.hover}`}
                   disabled={carregando}
-                  className={`
-                    px-4 py-2 border ${tema.border} rounded-lg
-                    ${tema.text} hover:${tema.hover} transition-colors
-                    disabled:opacity-50
-                  `}
                 >
                   Cancelar
                 </button>
@@ -384,12 +445,17 @@ export const TelaCategorias: React.FC = () => {
                   onClick={salvarCategoria}
                   disabled={carregando}
                   className={`
-                    ${tema.primary} text-white px-4 py-2 rounded-lg
-                    hover:opacity-90 transition-opacity
-                    disabled:opacity-50
+                    px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    transition-colors
                   `}
                 >
-                  {carregando ? 'Salvando...' : 'Salvar'}
+                  {carregando 
+                    ? 'Salvando...' 
+                    : categoriaEditando 
+                      ? 'Atualizar' 
+                      : 'Criar'
+                  }
                 </button>
               </div>
             </div>
